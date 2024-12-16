@@ -22,6 +22,6 @@ app.get('/', (req, res) => {
 });
 
 // Start the server and listen on the port from the config file
-app.listen(config.PORT, () => {
+app.listen(process.env.PORT || 5000, () => {
     console.log(`Server running on port ${config.PORT}`);
 });
