@@ -13,8 +13,7 @@
   "description": "",
   "dependencies": {
     "@azure/storage-blob": "^12.26.0",
-    "bcrypt": "^5.1.1",
-    "bcryptjs": "^2.4.3",
+    "bcryptjsjs": "^2.4.3",
     "debug": "^4.4.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",

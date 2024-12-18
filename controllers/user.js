@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt');
+const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { sendOtp, getOtp } = require('../utils/send_otp');
@@ -25,7 +25,7 @@ const login = async (req, res) => {
     }
 
     // Compare the password with the stored hash
-    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+    const isPasswordCorrect = await bcryptjs.compare(password, user.password);
     if (!isPasswordCorrect) {
       return res.status(400).json({ message: 'Invalid password' });
     }
@@ -58,7 +58,7 @@ const signup = async (req, res) => {
     }
 
     // Hash the password before saving it
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcryptjs.hash(password, 10);
 
     // Prepare user data (including the new fields)
     const userData = {
@@ -164,7 +164,7 @@ const resetPassword = async (req, res) => {
     }
 
     // Hash the new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcryptjs.hash(newPassword, 10);
 
     // Update the password using updateOne and await the operation
     await User.updateOne({ email }, { $set: { password: hashedPassword } });
