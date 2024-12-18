@@ -13,13 +13,23 @@ console.log('Starting Node.js API server...');
 console.log(`Running in ${process.env.NODE_ENV || 'development'} mode`);
 console.log(`Server will run on port: ${config.PORT}`);
 
+// Check if environment variables are loaded correctly
+console.log('Loaded environment variables:');
+console.log(`PORT: ${process.env.PORT}`);
+console.log(`MONGO_URI: ${process.env.MONGO_URI ? 'Loaded' : 'Not Loaded'}`);
+
 // Use JSON middleware to parse incoming requests
 app.use(express.json());
 console.log('JSON parsing middleware initialized');
 
 // Debugging MongoDB connection
 console.log('Connecting to MongoDB...');
-connectDB(); // This uses the MONGO_URI from the config.js file
+connectDB().then(() => {
+    console.log('MongoDB connected successfully');
+}).catch(err => {
+    console.error('MongoDB connection failed:', err);
+    process.exit(1); // Exit the app if MongoDB connection fails
+});
 
 // Register API routes with logging
 console.log('Registering API routes...');
@@ -45,4 +55,3 @@ app.listen(config.PORT, () => {
     console.log(`Server running on port ${config.PORT}`);
     console.log('Server is ready to handle requests!');
 });
-
