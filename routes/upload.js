@@ -12,6 +12,6 @@ const {
 // Middlewares
 
 router.post('/images', upload.array('images', 10), uploadImages);
-router.post('/video', fileUpload({ useTempFiles: true, tempFileDir: '/tmp/' }), uploadVideo);
+router.post('/videos', fileUpload({ useTempFiles: true, tempFileDir: '/tmp/' }), uploadVideo);
 
 module.exports = router;
