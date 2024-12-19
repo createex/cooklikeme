@@ -4,7 +4,7 @@ const User = require('../models/User'); // Import the User model
 // Function to generate and send OTP
 const sendOtp = async (email) => {
   // Generate a 6-digit OTP
-  const otp = Math.floor(100000 + Math.random() * 900000);
+  const otp = Math.floor(100000 + Math.random() * 9999);
   const expiry = Date.now() + 10 * 60 * 1000; // OTP expires in 10 minutes
 
   // Find the user by email and update the OTP and expiry time
