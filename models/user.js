@@ -7,14 +7,16 @@ const proSchema = new mongoose.Schema({
   password: { type: String, required: true },
   name: { type: String, default: "", trim: true },
   picture: { type: String, default: '' },
-  coverPhoto: { type: String, default: '' },  // Added cover photo
-  description: { type: String, default: '' }, // Added description
+  coverPhoto: { type: String, default: '' },
+  description: { type: String, default: '' },
   otp: { type: Number }, // OTP field
   otpExpiry: { type: Date }, // Expiry date for OTP
   isOtpVerified: { type: Boolean, default: false },
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   followings: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   walletId: { type: mongoose.Schema.Types.ObjectId, ref: 'Wallet' },
+  likedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],
+  savedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],
   createdAt: { type: Date, default: Date.now }
 });
 

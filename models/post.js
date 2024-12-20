@@ -6,6 +6,7 @@ const postSchema = new mongoose.Schema({
   owner_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   shares: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  saves: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   comments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Comment' }],
   description: { type: String, default: '' },
   tags: [{ type: String, required: true }],
