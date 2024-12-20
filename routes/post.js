@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const proController = require('../controllers/post');
+const postController = require('../controllers/post');
 const { userMiddleware } = require("../middleWares/user");
 
 router.use(userMiddleware);
 
 // create-profile
-router.post('/add-post', proController.addPost);
+router.post('/add-post', postController.addPost);
+router.get('/user-posts', postController.getUserPosts);
 
 module.exports = router;

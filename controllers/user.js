@@ -1,6 +1,7 @@
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Post = require('../models/post');
 const { sendOtp, getOtp } = require('../utils/send_otp');
 const { createUserWithWallet } = require('../controllers/wallet'); // Import wallet controller
 
@@ -267,7 +268,7 @@ const getUserProfile = async (req, res) => {
   try {
     // Fetch the user by userId that is already set by the userMiddleware
     const user = await User.findById(req.userId);
-
+    const posts = await Post.find({ owner_id: req.userId });
     // Return user profile details
     return res.status(200).json({
       status: true,
@@ -279,6 +280,7 @@ const getUserProfile = async (req, res) => {
         picture: user.picture,
         coverPhoto: user.coverPhoto,
         description: user.description,
+        posts: posts.length,
         followers: user.followers,
         followings: user.followings,
         createdAt: user.createdAt,

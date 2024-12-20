@@ -10,11 +10,6 @@ const validatePost = (data) => {
     errors.push('Please provide a video URL.');
   }
   
-  // Owner ID validation
-  if (!data.owner_id || !mongoose.Types.ObjectId.isValid(data.owner_id)) {
-    errors.push('Invalid owner ID.');
-  }
-  
   // Tags validation
   if (!data.tags || data.tags.length === 0) {
     errors.push('At least one tag is required.');
@@ -38,7 +33,10 @@ const validatePost = (data) => {
 // Controller to add a new post
 const addPost = async (req, res) => {
   try {
-    const { video, owner_id, description, tags, location } = req.body;
+    const { video, description, tags, location } = req.body;
+    
+    const owner_id = req.userId;
+    console.log("Owner ID:", owner_id);
 
     // Validate the post data
     const validationErrors = validatePost(req.body);
@@ -71,4 +69,74 @@ const addPost = async (req, res) => {
   }
 };
 
-module.exports = { addPost };
+const getUserPosts = async (req, res) => {
+  try {
+    const { itemsPerPage = 10, pageNumber = 1 } = req.query;
+
+    // Log initial query parameters
+
+    // Validate query parameters
+    const items = parseInt(itemsPerPage, 10);
+    const page = parseInt(pageNumber, 10);
+
+    // Log parsed pagination values
+
+    if (isNaN(items) || items <= 0) {
+      return res.status(400).json({ message: "Invalid value for 'itemsPerPage'. Must be a positive number." });
+    }
+
+    if (isNaN(page) || page <= 0) {
+      return res.status(400).json({ message: "Invalid value for 'pageNumber'. Must be a positive number." });
+    }
+
+    const userId = req.userId;
+
+    // Log the userId
+
+    // Calculate pagination
+    const totalPosts = await Post.countDocuments({ owner_id: userId });
+
+    if (totalPosts === 0) {
+      return res.status(200).json({
+        message: "No posts found for the user.",
+        posts: [],
+        pagination: {
+          totalItems: 0,
+          totalPages: 0,
+          currentPage: page,
+          itemsPerPage: items
+        }
+      });
+    }
+
+    const totalPages = Math.ceil(totalPosts / items);
+
+    // Log total posts and calculated total pages
+
+    if (page > totalPages) {
+      return res.status(400).json({ message: `Page number exceeds total pages (${totalPages}).` });
+    }
+
+    const posts = await Post.find({ owner_id: userId })
+      .skip((page - 1) * items)
+      .limit(items);
+
+    // Log posts retrieved
+
+    // Response
+    return res.status(200).json({
+      message: "Posts fetched successfully",
+      posts,
+      pagination: {
+        totalPosts,
+        totalPages,
+        currentPage: page,
+        itemsPerPage: items,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+};
+
+module.exports = { addPost, getUserPosts };
