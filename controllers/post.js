@@ -1,4 +1,5 @@
 const Post = require('../models/post');
+const User = require('../models/User');
 const mongoose = require('mongoose');
 
 // Validation function with user-friendly messages
@@ -72,71 +73,110 @@ const addPost = async (req, res) => {
 const getUserPosts = async (req, res) => {
   try {
     const { itemsPerPage = 10, pageNumber = 1 } = req.query;
-
-    // Log initial query parameters
-
-    // Validate query parameters
-    const items = parseInt(itemsPerPage, 10);
-    const page = parseInt(pageNumber, 10);
-
-    // Log parsed pagination values
-
-    if (isNaN(items) || items <= 0) {
-      return res.status(400).json({ message: "Invalid value for 'itemsPerPage'. Must be a positive number." });
-    }
-
-    if (isNaN(page) || page <= 0) {
-      return res.status(400).json({ message: "Invalid value for 'pageNumber'. Must be a positive number." });
-    }
-
+    const items = Math.max(1, parseInt(itemsPerPage, 10));
+    const page = Math.max(1, parseInt(pageNumber, 10));
     const userId = req.userId;
 
-    // Log the userId
+    // Validate pagination values
+    if (isNaN(items) || isNaN(page)) {
+      return res.status(400).json({ message: "Invalid pagination values." });
+    }
 
     // Calculate pagination
     const totalPosts = await Post.countDocuments({ owner_id: userId });
-
     if (totalPosts === 0) {
-      return res.status(200).json({
-        message: "No posts found for the user.",
-        posts: [],
-        pagination: {
-          totalItems: 0,
-          totalPages: 0,
-          currentPage: page,
-          itemsPerPage: items
-        }
-      });
+      return res.status(200).json({ message: "No posts found.", posts: [], pagination: { totalItems: 0, totalPages: 0, currentPage: page, itemsPerPage: items } });
     }
 
     const totalPages = Math.ceil(totalPosts / items);
+    if (page > totalPages) return res.status(400).json({ message: `Page number exceeds total pages (${totalPages}).` });
 
-    // Log total posts and calculated total pages
+    // Fetch posts with pagination
+    let posts = await Post.find({ owner_id: userId }).skip((page - 1) * items).limit(items);
+    posts = await Promise.all(posts.map(async (post) => {
+      const owner = await User.findById(post.owner_id).select('name picture');
+      return {
+        _id: post._id,
+        description: post.description,
+        owner: {
+          id: post.owner_id,
+          name: owner?.name || '',
+          picture: owner?.picture || ''
+        },
+        tags: post.tags || [],
+        location: post.location || {},
+        likes: post.likes || [],
+        shares: post.shares || [],
+        comments: post.comments || [],
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+      };
+    }));
 
-    if (page > totalPages) {
-      return res.status(400).json({ message: `Page number exceeds total pages (${totalPages}).` });
-    }
-
-    const posts = await Post.find({ owner_id: userId })
-      .skip((page - 1) * items)
-      .limit(items);
-
-    // Log posts retrieved
-
-    // Response
     return res.status(200).json({
       message: "Posts fetched successfully",
       posts,
-      pagination: {
-        totalPosts,
-        totalPages,
-        currentPage: page,
-        itemsPerPage: items,
-      },
+      pagination: { totalPosts, totalPages, currentPage: page, itemsPerPage: items }
     });
+
   } catch (error) {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
 
-module.exports = { addPost, getUserPosts };
+const getPosts = async (req, res) => {
+  try {
+    const { itemsPerPage = 10, pageNumber = 1 } = req.query;
+    const userId = req.userId;
+    const items = Math.max(1, parseInt(itemsPerPage, 10));
+    const page = Math.max(1, parseInt(pageNumber, 10));
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Helper to populate owner details
+    const populateOwner = async (post) => {
+      const owner = await User.findById(post.owner_id).select('name picture');
+      return {
+        _id: post._id,
+        description: post.description,
+        owner: { id: post.owner_id, name: owner?.name || '', picture: owner?.picture || '' },
+        tags: post.tags || [],
+        location: post.location || {},
+        likes: post.likes || [],
+        shares: post.shares || [],
+        comments: post.comments || [],
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+      };
+    };
+
+    // Fetch posts: trending, followed users, and random
+    const [trendingPosts, followingPosts, randomPosts] = await Promise.all([
+      Post.aggregate([
+        { $addFields: { numLikes: { $size: { $ifNull: ["$likes", []] } }, numShares: { $size: { $ifNull: ["$shares", []] } }, numComments: { $size: { $ifNull: ["$comments", []] } } } },
+        { $sort: { numLikes: -1, numShares: -1, numComments: -1, createdAt: -1 } },
+        { $limit: items }
+      ]),
+      user.followings?.length ? Post.find({ owner_id: { $in: user.followings } }).sort({ createdAt: -1 }).limit(items) : [],
+      Post.aggregate([{ $sample: { size: items } }])
+    ]);
+
+    // Combine posts and shuffle them
+    let posts = [...trendingPosts, ...followingPosts, ...randomPosts];
+    posts = await Promise.all(posts.map(populateOwner));
+    posts = posts.sort(() => Math.random() - 0.5);  // Shuffle posts
+
+    const totalPosts = posts.length;
+    const totalPages = Math.ceil(totalPosts / items);
+    if (page > totalPages) return res.status(400).json({ message: `Page number exceeds total pages (${totalPages}).` });
+
+    const postsToSend = posts.slice((page - 1) * items, page * items);
+    return res.status(200).json({ message: "Posts fetched successfully", posts: postsToSend, pagination: { totalPosts, totalPages, currentPage: page, itemsPerPage: items } });
+
+  } catch (error) {
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+};
+
+module.exports = { addPost, getUserPosts, getPosts };
