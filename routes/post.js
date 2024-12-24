@@ -11,11 +11,17 @@ router.post('/add-post', postController.addPost);
 // Get posts of the user
 router.get('/user-posts', postController.getUserPosts);
 
-// Get all posts
-router.get('/get-posts', postController.getPosts);
+// Get followings posts
+router.get('/get-following-posts', postController.getFollowingsPosts);
+
+// Get trending posts
+router.get('/get-trending-posts', postController.getTrendingAndRandomPosts);
 
 // Like / Unlike post
 router.post('/like', postController.likePost);
+
+//Comment on a post
+router.post('/comment', postController.commentOnPost);
 
 // Save / Unsave post
 router.post('/save', postController.savePost);
