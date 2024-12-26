@@ -357,7 +357,7 @@ const commentOnPost = async (req, res) => {
   try {
     const { postId } = req.query;
     const { text } = req.body;
-    const { replyToCommentId } = req.query;
+    const { replyToCommentId } = req.query;  // Check if it's a reply
     const userId = req.userId;
 
     if (!text) {
@@ -373,24 +373,28 @@ const commentOnPost = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
+    // Create a new comment object
     const newComment = new Comment({
       post_id: postId,
       owner_id: userId,
       text,
     });
 
+    // Save the comment
     const savedComment = await newComment.save();
 
     if (replyToCommentId) {
+      // If it's a reply, find the parent comment and add this comment to its replies
       const parentComment = await Comment.findById(replyToCommentId);
       if (parentComment) {
-        parentComment.replies.push(savedComment._id);
+        parentComment.replies.push(savedComment._id);  // Add the new comment to the replies
         await parentComment.save();
       }
+    } else {
+      // If it's not a reply, add the comment to the post's comments array
+      post.comments.push(savedComment._id);
+      await post.save();
     }
-
-    post.comments.push(savedComment._id);
-    await post.save();
 
     return res.status(201).json({ message: "Comment added successfully", comment: savedComment });
   } catch (err) {
@@ -398,8 +402,159 @@ const commentOnPost = async (req, res) => {
   }
 };
 
+const getComments = async (req, res) => {
+  try {
+    const { postId, parentCommentId } = req.query;
+    const { itemsPerPage = 10, pageNumber = 1 } = req.query;
 
-module.exports = { addPost, getUserPosts, likePost, savePost, sharePost, commentOnPost, getLikedPosts, getSavedPosts, getTrendingAndRandomPosts, getFollowingsPosts };
+    if (!postId) {
+      return res.status(400).json({ message: "Post ID is required" });
+    }
+
+    const items = Math.max(1, parseInt(itemsPerPage, 10));
+    const page = Math.max(1, parseInt(pageNumber, 10));
+    if (isNaN(items) || isNaN(page)) {
+      return res.status(400).json({ message: "Invalid pagination values" });
+    }
+
+    // If parentCommentId is provided, fetch replies for that comment
+    if (parentCommentId) {
+      console.log("Fetching replies for parent comment:", parentCommentId);
+
+      // Get the comment with the specific parentCommentId and populate replies
+      const parentComment = await Comment.findOne({ post_id: postId, _id: parentCommentId })
+        .populate('owner_id', 'name email _id profile_picture')  // Populate owner details with profile_picture
+        .populate({
+          path: 'replies',
+          populate: {
+            path: 'owner_id',
+            select: 'name email _id profile_picture',
+          }
+        })
+        .lean();
+
+      console.log("Parent comment fetched:", parentComment); // Debug the parent comment
+
+      if (!parentComment) {
+        return res.status(404).json({ message: "Parent comment not found" });
+      }
+
+      // Process replies and log the replies data
+      const processedReplies = parentComment.replies.map(reply => {
+        console.log("Reply before mapping:", reply); // Debug each reply
+
+        return {
+          _id: reply._id,
+          post_id: reply.post_id,
+          owner_id: {
+            _id: reply.owner_id._id,
+            name: reply.owner_id.name,
+            profile_picture: reply.owner_id.profile_picture || "",
+          },
+          text: reply.text,
+          likesCount: reply.likes.length,
+          repliesCount: reply.replies ? reply.replies.length : 0,
+          createdAt: reply.createdAt,
+        };
+      });
+
+      return res.status(200).json({
+        message: "Replies fetched successfully",
+        replies: processedReplies,
+        pagination: {
+          totalItems: processedReplies.length,
+          totalPages: Math.ceil(processedReplies.length / items),
+          currentPage: page,
+          itemsPerPage: items,
+        },
+      });
+    }
+
+    // Fetching main comments for the post (no replies)
+    const commentsQuery = { post_id: postId, replies: { $exists: false } };
+
+    // Get total main comments for the post
+    const totalComments = await Comment.countDocuments({ post_id: postId, replies: { $exists: false } });
+
+    // Fetch main comments with pagination and populate owner details and replies
+    const comments = await Comment.find(commentsQuery)
+      .skip((page - 1) * items)
+      .limit(items)
+      .sort({ createdAt: -1 })  // Sort by latest
+      .populate('owner_id', 'name email _id profile_picture')  // Populate owner details with profile_picture
+      .populate({
+        path: 'replies',
+        populate: {
+          path: 'owner_id',
+          select: 'name email _id profile_picture', // Populate owner details for replies with profile_picture
+        }
+      })
+      .lean();
+
+    console.log("Main comments fetched:", comments); // Debug the main comments
+
+    // Process the main comments and return the necessary fields
+    const processedComments = comments.map(comment => {
+      console.log("Comment before mapping:", comment); // Debug each comment
+
+      return {
+        _id: comment._id,
+        post_id: comment.post_id,
+        owner_id: {
+          _id: comment.owner_id._id,
+          name: comment.owner_id.name,
+          email: comment.owner_id.email,
+          profile_picture: comment.owner_id.profile_picture || "", // Return empty string if no profile picture
+        },
+        text: comment.text,
+        likesCount: comment.likes.length,
+        repliesCount: comment.replies ? comment.replies.length : 0,
+        createdAt: comment.createdAt,
+        replies: comment.replies ? comment.replies.map(reply => {
+          console.log("Reply before mapping:", reply); // Debug each reply inside comment
+
+          return {
+            _id: reply._id,
+            post_id: reply.post_id,
+            owner_id: {
+              _id: reply.owner_id._id,
+              name: reply.owner_id.name,
+              email: reply.owner_id.email,
+              profile_picture: reply.owner_id.profile_picture || "", // Return empty string if no profile picture
+            },
+            text: reply.text,
+            likesCount: reply.likes.length,
+            repliesCount: reply.replies ? reply.replies.length : 0,
+            createdAt: reply.createdAt,
+          };
+        }) : [],
+      };
+    });
+
+    return res.status(200).json({
+      message: "Comments fetched successfully",
+      totalComments,
+      comments: processedComments,
+      pagination: {
+        totalItems: totalComments,
+        totalPages: Math.ceil(totalComments / items),
+        currentPage: page,
+        itemsPerPage: items,
+      },
+    });
+  } catch (error) {
+    console.error("Error occurred:", error); // Log the error
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+};
+
+
+
+
+
+
+
+module.exports = { addPost, getUserPosts, likePost, savePost, sharePost, commentOnPost, getLikedPosts, getSavedPosts, getTrendingAndRandomPosts, getFollowingsPosts, getComments };
 
 
 //Helpers
