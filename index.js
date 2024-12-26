@@ -4,6 +4,7 @@ const connectDB = require('./config/db');
 const userRoutes = require('./routes/user');
 const postRoutes = require('./routes/post');
 const stripeRoutes = require('./routes/stripe');
+const storiesRoutes = require('./routes/story');
 const uploadRoutes = require('./routes/upload');
 
 const app = express();
@@ -18,6 +19,7 @@ connectDB();
 app.use('/api/users', userRoutes);
 app.use('/api/post', postRoutes);
 app.use('/api/stripe', stripeRoutes);
+app.use('/api/story', storiesRoutes);
 app.use('/api/upload', uploadRoutes);
 
 // Base route
