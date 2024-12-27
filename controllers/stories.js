@@ -45,26 +45,36 @@ try {
 // Get all stories (including "My Stories" and "Other Stories")
 const getAllStories = async (req, res) => {
   try {
-    const userId = req.userId;  // Get the logged-in user's ID
+    const userId = req.userId; // Logged-in user's ID
 
-    // Get all active stories, sorted by createdAt (most recent first)
-    const stories = await Story.find({ isActive: true })
-      .sort({ createdAt: -1 })  // Sort by most recent
+    // Fetch the current user along with their followings
+    const currentUser = await User.findById(userId).select('followings').populate('followings', '_id');
+
+    if (!currentUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const followingsIds = currentUser.followings.map(user => user._id.toString());
+
+    // Fetch stories where owner_id is either the logged-in user or in the followings list
+    const stories = await Story.find({
+      isActive: true,
+      $or: [{ owner_id: userId }, { owner_id: { $in: followingsIds } }],
+    })
+      .sort({ createdAt: -1 })
       .populate('owner_id', 'name picture');
 
     // Initialize objects to store grouped stories
-    const myStories = [];
-    const otherStories = [];
-
-    // Group stories by owner
     const myOwner = {
       id: '',
       name: '',
       picture: '',
-      stories: []
+      stories: [],
     };
 
-    // Loop through all the stories to separate my stories and other stories
+    const otherStories = [];
+
+    // Loop through all the stories to group them
     stories.forEach(story => {
       const ownerId = story.owner_id._id.toString();
       const storyData = {
@@ -74,14 +84,14 @@ const getAllStories = async (req, res) => {
         mediaType: story.mediaType,
       };
 
-      // Check if this story belongs to the logged-in user
+      // If the story belongs to the logged-in user, add it to "myStories"
       if (ownerId === userId.toString()) {
         myOwner.id = story.owner_id._id;
         myOwner.name = story.owner_id.name;
         myOwner.picture = story.owner_id.picture;
         myOwner.stories.push(storyData);
       } else {
-        // Otherwise, add it to other users' stories
+        // Otherwise, add it to "otherStories"
         const existingOwnerIndex = otherStories.findIndex(owner => owner.id.toString() === ownerId);
 
         if (existingOwnerIndex !== -1) {
@@ -91,7 +101,7 @@ const getAllStories = async (req, res) => {
             id: story.owner_id._id,
             name: story.owner_id.name,
             picture: story.owner_id.picture,
-            stories: [storyData]
+            stories: [storyData],
           });
         }
       }
@@ -99,14 +109,20 @@ const getAllStories = async (req, res) => {
 
     return res.status(200).json({
       message: 'Stories fetched successfully',
-      myStories: myOwner.stories.length ? {  id: myOwner.id, name: myOwner.name, picture: myOwner.picture , stories: myOwner.stories } : null,
-      otherStories: otherStories.length ? otherStories : []
+      myStories: myOwner.stories.length
+        ? {
+            id: myOwner.id,
+            name: myOwner.name,
+            picture: myOwner.picture,
+            stories: myOwner.stories,
+          }
+        : null,
+      otherStories: otherStories.length ? otherStories : [],
     });
   } catch (error) {
     return res.status(500).json({ message: 'Internal Server Error', error: error.message });
   }
 };
-
 
 // Get all stories of a specific owner
 const getStoriesByOwner = async (req, res) => {

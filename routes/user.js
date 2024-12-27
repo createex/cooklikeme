@@ -15,7 +15,7 @@ router.post('/forgot-password', proController.forgotPassword);
 // Reset Password Route (verify OTP and reset)
 router.post('/reset-password', proController.resetPassword);
 
-// Verify OTP
+// Send OTP
 router.post('/send-otp', proController.sendOtpAPI);
 
 // Verify OTP
@@ -23,16 +23,25 @@ router.post('/verify-otp', proController.verifyOtp);
 
 router.use(userMiddleware);
 
-// create-profile
+// Create Profile
 router.post('/create-profile', proController.createProfile);
 
-// create-profile
+// User Verified Status
 router.get('/user-verified', proController.getUserVerificationStatus);
 
-// create-profile
+// Get User Profile
 router.get('/user-profile', proController.getUserProfile);
 
-// Update user profile (only accessible if the user is authenticated)
+// Update User Profile (only accessible if the user is authenticated)
 router.put('/update-profile', proController.updateProfile);
+
+// Get Followers
+router.get('/followers', proController.getFollowers);
+
+// Get Followings
+router.get('/followings', proController.getFollowings);
+
+// Follow/Unfollow User
+router.post('/follow', proController.followOrUnfollowUser); // Now expects query param `followUserId`
 
 module.exports = router;

@@ -346,4 +346,98 @@ const updateProfile = async (req, res) => {
   }
 };
 
-module.exports = { signup, verifyOtp, login, forgotPassword, resetPassword, sendOtpAPI, createProfile, getUserVerificationStatus, getUserProfile, updateProfile };
+const getFollowers = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const user = await User.findById(userId).populate('followers', 'id username picture followings');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const followers = user.followers.map((follower) => ({
+      id: follower._id,
+      username: follower.username,
+      picture: follower.picture,
+      youFollowed: user.followings.includes(follower._id),
+    }));
+
+    return res.status(200).json({ message: 'Followers fetched successfully', followers });
+  } catch (error) {
+    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+};
+
+
+const getFollowings = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const user = await User.findById(userId).populate('followings', 'id name username picture followings');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const followings = user.followings.map((following) => ({
+      id: following._id,
+      name: following.name,
+      username: following.username,
+      picture: following.picture,
+      followedYou: following.followings.includes(userId), // Check if the current user is in their followers list
+    }));
+
+    return res.status(200).json({ message: 'Followings fetched successfully', followings });
+  } catch (error) {
+    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+};
+
+
+const followOrUnfollowUser = async (req, res) => {
+  try {
+    const userId = req.userId; // Current user's ID
+    const followUserId = req.query.followUserId; // Get `followUserId` from query params
+
+    if (!followUserId) {
+      return res.status(400).json({ message: 'followUserId is required' });
+    }
+
+    if (userId === followUserId) {
+      return res.status(400).json({ message: 'You cannot follow/unfollow yourself' });
+    }
+
+    const user = await User.findById(userId);
+    const targetUser = await User.findById(followUserId);
+
+    if (!user || !targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const isFollowing = user.followings.includes(followUserId);
+
+    if (isFollowing) {
+      // Unfollow the user
+      user.followings.pull(followUserId);
+      targetUser.followers.pull(userId);
+      await user.save();
+      await targetUser.save();
+
+      return res.status(200).json({ message: 'User unfollowed successfully' });
+    } else {
+      // Follow the user
+      user.followings.push(followUserId);
+      targetUser.followers.push(userId);
+      await user.save();
+      await targetUser.save();
+
+      return res.status(200).json({ message: 'User followed successfully' });
+    }
+  } catch (error) {
+    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+};
+
+
+module.exports = { signup, verifyOtp, login, forgotPassword, resetPassword, sendOtpAPI, createProfile, getUserVerificationStatus, getUserProfile, updateProfile, getFollowers, getFollowings, followOrUnfollowUser };
