@@ -7,7 +7,7 @@ const { createUserWithWallet } = require('../controllers/wallet'); // Import wal
 
 // User Login
 const login = async (req, res) => {
-  const { username_or_email, password } = req.body;
+  const { username_or_email, password, fcmToken } = req.body;
 
   try {
     // Check if the provided username_or_email is an email or username
@@ -25,6 +25,11 @@ const login = async (req, res) => {
       return res.status(400).json({ message: 'User not found' });
     }
 
+    if(fcmToken) {
+    user.fcmToken = fcmToken;
+    await user.save();
+    }
+    
     // Compare the password with the stored hash
     const isPasswordCorrect = await bcryptjs.compare(password, user.password);
     if (!isPasswordCorrect) {

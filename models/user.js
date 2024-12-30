@@ -15,6 +15,7 @@ const proSchema = new mongoose.Schema({
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   followings: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   walletId: { type: mongoose.Schema.Types.ObjectId, ref: 'Wallet' },
+  fcmToken: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 

@@ -103,12 +103,12 @@ const getUserPosts = async (req, res) => {
       .limit(items);
 
     const posts = await Promise.all(userPosts.map(async (post) => {
-      const owner = await User.findById(post.owner_id).select('id name picture');
+      const owner = await User.findById(post.owner_id).select('id name picture fcmToken');
       return {
         _id: post._id,
         video: post.video,
         description: post.description,
-        owner: { id: owner._id, name: owner.name, picture: owner.picture },
+        owner: { id: owner._id, name: owner.name, picture: owner.picture, fcmToken: owner.fcmToken || '' },
         tags: post.tags,
         location: post.location,
         likes: post.likes.length,
@@ -164,13 +164,13 @@ const getLikedPosts = async (req, res) => {
       .limit(items);
 
     const posts = await Promise.all(likedPosts.map(async (post) => {
-      const owner = await User.findById(post.owner_id).select('id name picture');
+      const owner = await User.findById(post.owner_id).select('id name picture fcmToken');
 
       return {
         _id: post._id,
         video: post.video,
         description: post.description,
-        owner: { id: owner._id, name: owner.name, picture: owner.picture },
+        owner: { id: owner._id, name: owner.name, picture: owner.picture, fcmToken: owner.fcmToken || '' },
         tags: post.tags,
         location: post.location,
         likes: post.likes.length,
@@ -261,7 +261,7 @@ const getFollowingsPosts = async (req, res) => {
 
     // Populate owner information and include the video field
     const posts = await Promise.all(followingPosts.map(async (post) => {
-      const owner = await User.findById(post.owner_id).select('id name picture');
+      const owner = await User.findById(post.owner_id).select('id name picture fcmToken');
       return {
         _id: post._id,
         video: post.video,
@@ -270,6 +270,7 @@ const getFollowingsPosts = async (req, res) => {
           id: owner._id,
           name: owner.name,
           picture: owner.picture,
+          fcmToken: owner.fcmToken || "",
         },
         tags: post.tags,
         location: post.location,
@@ -511,12 +512,12 @@ const getComments = async (req, res) => {
 
       // Get the comment with the specific parentCommentId and populate replies
       const parentComment = await Comment.findOne({ post_id: postId, _id: parentCommentId })
-        .populate('owner_id', 'name email _id profile_picture')  // Populate owner details with profile_picture
+        .populate('owner_id', 'name email _id profile_picture fcmToken')  // Populate owner details with profile_picture
         .populate({
           path: 'replies',
           populate: {
             path: 'owner_id',
-            select: 'name email _id profile_picture',
+            select: 'name email _id profile_picture fcmToken',
           }
         })
         .lean();
@@ -538,6 +539,7 @@ const getComments = async (req, res) => {
             _id: reply.owner_id._id,
             name: reply.owner_id.name,
             profile_picture: reply.owner_id.profile_picture || "",
+            fcmToken: reply.owner_id.fcmToken || "",
           },
           text: reply.text,
           likesCount: reply.likes.length,
@@ -670,6 +672,7 @@ const populateOwner = async (post, userId) => {
         id: post.owner_id,
         name: owner?.name || '',
         picture: owner?.picture || '',
+        fcmToken: owner?.fcmToken || '',
       },
       tags: post.tags || [],
       location: post.location || {},
@@ -689,7 +692,7 @@ const populateOwner = async (post, userId) => {
 };
 
 const populateOwnerWithVideo = async (post, userId) => {
-  const owner = await User.findById(post.owner_id).select("id name picture");
+  const owner = await User.findById(post.owner_id).select("id name picture fcmToken");
   return {
     _id: post._id,
     video: post.video || null, // Add video field if missing
@@ -698,6 +701,7 @@ const populateOwnerWithVideo = async (post, userId) => {
       id: owner._id,
       name: owner.name,
       picture: owner.picture,
+      fcmToken: owner.fcmToken ||  "",
     },
     tags: post.tags,
     location: post.location,
