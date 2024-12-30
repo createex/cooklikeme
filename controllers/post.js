@@ -79,34 +79,59 @@ const getUserPosts = async (req, res) => {
     const page = Math.max(1, parseInt(pageNumber, 10));
     const userId = req.userId;
 
-    // Validate pagination values
     if (isNaN(items) || isNaN(page)) {
       return res.status(400).json({ message: "Invalid pagination values." });
     }
 
-    // Calculate pagination
     const totalPosts = await Post.countDocuments({ owner_id: userId });
     if (totalPosts === 0) {
-      return res.status(200).json({ message: "No posts found.", posts: [], pagination: { totalItems: 0, totalPages: 0, currentPage: page, itemsPerPage: items } });
+      return res.status(200).json({
+        message: "No posts found.",
+        posts: [],
+        pagination: { totalItems: 0, totalPages: 0, currentPage: page, itemsPerPage: items },
+      });
     }
 
     const totalPages = Math.ceil(totalPosts / items);
-    if (page > totalPages) return res.status(400).json({ message: `Page number exceeds total pages (${totalPages}).` });
+    if (page > totalPages) {
+      return res.status(400).json({ message: `Page number exceeds total pages (${totalPages}).` });
+    }
 
-    // Fetch posts with pagination
-    let posts = await Post.find({ owner_id: userId }).skip((page - 1) * items).limit(items);
-    posts = await Promise.all(posts.map(async (post) => populateOwner(post, userId)));
+    const userPosts = await Post.find({ owner_id: userId })
+      .select('video owner_id likes shares saves comments description tags location createdAt updatedAt')
+      .skip((page - 1) * items)
+      .limit(items);
+
+    const posts = await Promise.all(userPosts.map(async (post) => {
+      const owner = await User.findById(post.owner_id).select('id name picture');
+      return {
+        _id: post._id,
+        video: post.video,
+        description: post.description,
+        owner: { id: owner._id, name: owner.name, picture: owner.picture },
+        tags: post.tags,
+        location: post.location,
+        likes: post.likes.length,
+        shares: post.shares.length,
+        saves: post.saves.length,
+        comments: post.comments.length,
+        isLiked: post.likes.includes(userId),
+        isSaved: post.saves.includes(userId),
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+      };
+    }));
 
     return res.status(200).json({
       message: "Posts fetched successfully",
       posts,
-      pagination: { totalPosts, totalPages, currentPage: page, itemsPerPage: items }
+      pagination: { totalPosts, totalPages, currentPage: page, itemsPerPage: items },
     });
-
   } catch (error) {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 
 const getLikedPosts = async (req, res) => {
   try {
@@ -115,40 +140,55 @@ const getLikedPosts = async (req, res) => {
     const page = Math.max(1, parseInt(pageNumber, 10));
     const userId = req.userId;
 
-    // Validate pagination values
     if (isNaN(items) || isNaN(page)) {
       return res.status(400).json({ message: "Invalid pagination values." });
     }
 
-    // Fetch the total count of liked posts
     const totalPosts = await Post.countDocuments({ likes: userId });
     if (totalPosts === 0) {
       return res.status(200).json({
         message: "No liked posts found.",
         posts: [],
-        pagination: { totalItems: 0, totalPages: 0, currentPage: page, itemsPerPage: items }
+        pagination: { totalItems: 0, totalPages: 0, currentPage: page, itemsPerPage: items },
       });
     }
 
-    // Calculate total pages
     const totalPages = Math.ceil(totalPosts / items);
     if (page > totalPages) {
       return res.status(400).json({ message: `Page number exceeds total pages (${totalPages}).` });
     }
 
-    // Fetch liked posts with pagination
-    const posts = await Post.find({ likes: userId })
+    const likedPosts = await Post.find({ likes: userId })
+      .select('video owner_id likes shares saves comments description tags location createdAt updatedAt')
       .skip((page - 1) * items)
       .limit(items);
 
-    const detailedPosts = await Promise.all(posts.map(async (post) => populateOwner(post, userId)));
+    const posts = await Promise.all(likedPosts.map(async (post) => {
+      const owner = await User.findById(post.owner_id).select('id name picture');
+
+      return {
+        _id: post._id,
+        video: post.video,
+        description: post.description,
+        owner: { id: owner._id, name: owner.name, picture: owner.picture },
+        tags: post.tags,
+        location: post.location,
+        likes: post.likes.length,
+        shares: post.shares.length,
+        saves: post.saves.length,
+        comments: post.comments.length,
+        isLiked: post.likes.includes(userId),
+        isSaved: post.saves.includes(userId),
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+      };
+    }));
 
     return res.status(200).json({
       message: "Liked posts fetched successfully",
-      posts: detailedPosts,
-      pagination: { totalPosts, totalPages, currentPage: page, itemsPerPage: items }
+      posts,
+      pagination: { totalPosts, totalPages, currentPage: page, itemsPerPage: items },
     });
-
   } catch (error) {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
@@ -162,23 +202,16 @@ const getSavedPosts = async (req, res) => {
     const page = Math.max(1, parseInt(pageNumber, 10));
     const userId = req.userId;
 
-    // Validate pagination values
     if (isNaN(items) || isNaN(page)) {
       return res.status(400).json({ message: "Invalid pagination values." });
     }
 
-    // Calculate total saved posts for the user
     const totalPosts = await Post.countDocuments({ saves: userId });
     if (totalPosts === 0) {
       return res.status(200).json({
         message: "No posts found.",
         posts: [],
-        pagination: {
-          totalItems: 0,
-          totalPages: 0,
-          currentPage: page,
-          itemsPerPage: items,
-        },
+        pagination: { totalItems: 0, totalPages: 0, currentPage: page, itemsPerPage: items },
       });
     }
 
@@ -187,14 +220,11 @@ const getSavedPosts = async (req, res) => {
       return res.status(400).json({ message: `Page number exceeds total pages (${totalPages}).` });
     }
 
-    // Fetch saved posts with pagination
     let posts = await Post.find({ saves: userId })
       .skip((page - 1) * items)
       .limit(items);
 
-    posts = await Promise.all(
-      posts.map(async (post) => populateOwner(post, userId))
-    );
+    posts = await Promise.all(posts.map(async (post) => populateOwnerWithVideo(post, userId)));
 
     return res.status(200).json({
       message: "Posts fetched successfully",
@@ -214,18 +244,45 @@ const getFollowingsPosts = async (req, res) => {
     const items = Math.max(1, parseInt(itemsPerPage, 10));
     const page = Math.max(1, parseInt(pageNumber, 10));
 
+    // Find user and validate existence
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
+    // Check if user has followings
     if (!user.followings?.length) {
       return res.status(200).json({ message: 'No followings posts', posts: [] });
     }
 
+    // Retrieve posts from followings
     const followingPosts = await Post.find({ owner_id: { $in: user.followings } })
+      .select('video owner_id likes shares saves comments description tags location createdAt updatedAt') // Explicitly include fields
       .sort({ createdAt: -1 })
       .limit(items);
 
-    const posts = await Promise.all(followingPosts.map((post) => populateOwner(post, userId)));
+    // Populate owner information and include the video field
+    const posts = await Promise.all(followingPosts.map(async (post) => {
+      const owner = await User.findById(post.owner_id).select('id name picture');
+      return {
+        _id: post._id,
+        video: post.video,
+        description: post.description,
+        owner: {
+          id: owner._id,
+          name: owner.name,
+          picture: owner.picture,
+        },
+        tags: post.tags,
+        location: post.location,
+        likes: post.likes.length,
+        shares: post.shares.length,
+        saves: post.saves.length,
+        comments: post.comments.length,
+        isLiked: post.likes.includes(userId),
+        isSaved: post.saves.includes(userId),
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+      };
+    }));
 
     return res.status(200).json({ message: 'Followings posts fetched successfully', posts });
   } catch (error) {
@@ -252,8 +309,37 @@ const getTrendingAndRandomPosts = async (req, res) => {
         },
         { $sort: { numLikes: -1, numShares: -1, numComments: -1, createdAt: -1 } },
         { $limit: items },
+        {
+          $project: {
+            _id: 1,
+            video: 1,
+            owner_id: 1,
+            description: 1,
+            tags: 1,
+            location: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            numLikes: 1,
+            numShares: 1,
+            numComments: 1,
+          },
+        },
       ]),
-      Post.aggregate([{ $sample: { size: items } }]),
+      Post.aggregate([
+        { $sample: { size: items } },
+        {
+          $project: {
+            _id: 1,
+            video: 1,
+            owner_id: 1,
+            description: 1,
+            tags: 1,
+            location: 1,
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        },
+      ]),
     ]);
 
     const posts = [...trendingPosts, ...randomPosts];
@@ -264,6 +350,8 @@ const getTrendingAndRandomPosts = async (req, res) => {
     return res.status(500).json({ message: 'Internal Server Error', error: error.message });
   }
 };
+
+
 
 const likePost = async (req, res) => {
   try {
@@ -548,39 +636,77 @@ const getComments = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
 module.exports = { addPost, getUserPosts, likePost, savePost, sharePost, commentOnPost, getLikedPosts, getSavedPosts, getTrendingAndRandomPosts, getFollowingsPosts, getComments };
 
 
 //Helpers
 const populateOwner = async (post, userId) => {
-  const owner = await User.findById(post.owner_id).select('name picture');
-  post.likes = post.likes || [];
-  post.saves = post.saves || [];
-
-  // Check if the current user has liked or saved the post
   const ObjectId = require('mongoose').Types.ObjectId;
   const userIdObjectId = new ObjectId(userId);
-  const isLiked = post.likes.some((like) => like.equals(userIdObjectId));
-  const isSaved = post.saves.some((save) => save.equals(userIdObjectId));
 
+  try {
+    console.log(`[DEBUG] Fetching owner details for post ID: ${post._id}`);
+    const owner = await User.findById(post.owner_id).select('name picture');
+    if (!owner) {
+      console.log(`[DEBUG] Owner not found for owner_id: ${post.owner_id}`);
+    }
+
+    // Ensure post properties exist
+    post.likes = post.likes || [];
+    post.saves = post.saves || [];
+    post.comments = post.comments || [];
+    post.shares = post.shares || [];
+    console.log(`[DEBUG] Post likes count: ${post.likes.length}, saves count: ${post.saves.length}`);
+
+    // Check if the current user has liked or saved the post
+    const isLiked = post.likes.some((like) => like.equals(userIdObjectId));
+    const isSaved = post.saves.some((save) => save.equals(userIdObjectId));
+    console.log(`[DEBUG] Post liked by user: ${isLiked}, saved by user: ${isSaved}`);
+
+    return {
+      _id: post._id,
+      description: post.description,
+      owner: {
+        id: post.owner_id,
+        name: owner?.name || '',
+        picture: owner?.picture || '',
+      },
+      tags: post.tags || [],
+      location: post.location || {},
+      likes: post.likes.length || 0,
+      shares: post.shares.length || 0,
+      saves: post.saves.length || 0,
+      comments: post.comments.length || 0,
+      isLiked,
+      isSaved,
+      createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+    };
+  } catch (error) {
+    console.error(`[ERROR] Error in populateOwner for post ID: ${post._id}. Error: ${error.message}`);
+    throw error; // Re-throw the error to handle it upstream
+  }
+};
+
+const populateOwnerWithVideo = async (post, userId) => {
+  const owner = await User.findById(post.owner_id).select("id name picture");
   return {
     _id: post._id,
+    video: post.video || null, // Add video field if missing
     description: post.description,
-    owner: { id: post.owner_id, name: owner?.name || '', picture: owner?.picture || '' },
-    tags: post.tags || [],
-    location: post.location || {},
-    likes: post.likes.length || 0,
-    shares: post.shares.length || 0,
-    saves: post.saves.length || 0,
-    comments: post.comments.length || 0,
-    isLiked,
-    isSaved,
+    owner: {
+      id: owner._id,
+      name: owner.name,
+      picture: owner.picture,
+    },
+    tags: post.tags,
+    location: post.location,
+    likes: post.likes.length,
+    shares: post.shares.length,
+    saves: post.saves.length,
+    comments: post.comments.length,
+    isLiked: post.likes.includes(userId),
+    isSaved: post.saves.includes(userId),
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
   };
