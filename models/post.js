@@ -10,6 +10,7 @@ const postSchema = new mongoose.Schema({
   comments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Comment' }],
   description: { type: String, default: '' },
   tags: [{ type: String, required: true }],
+  thumbnail: { type: String, default: '' },
   location: {
     locationString: { type: String, required: true },
     lat: { type: Number, required: true },

@@ -36,7 +36,7 @@ const validatePost = (data) => {
 // Controller to add a new post
 const addPost = async (req, res) => {
   try {
-    const { video, description, tags, location } = req.body;
+    const { video, description, tags, location, thumbnail } = req.body;
     
     const owner_id = req.userId;
     console.log("Owner ID:", owner_id);
@@ -50,6 +50,7 @@ const addPost = async (req, res) => {
     // Create a new post
     const newPost = new Post({
       video,
+      thumbnail: thumbnail || '',
       owner_id,
       description: description || '', // Default to empty string if not provided
       tags,
@@ -98,7 +99,7 @@ const getUserPosts = async (req, res) => {
     }
 
     const userPosts = await Post.find({ owner_id: userId })
-      .select('video owner_id likes shares saves comments description tags location createdAt updatedAt')
+      .select('video owner_id likes shares saves comments description tags location createdAt updatedAt thumbnail')
       .skip((page - 1) * items)
       .limit(items);
 
@@ -106,6 +107,7 @@ const getUserPosts = async (req, res) => {
       const owner = await User.findById(post.owner_id).select('id name picture fcmToken');
       return {
         _id: post._id,
+        thumbnail: post.thumbnail || "",
         video: post.video,
         description: post.description,
         owner: { id: owner._id, name: owner.name, picture: owner.picture, fcmToken: owner.fcmToken || '' },
@@ -159,7 +161,7 @@ const getLikedPosts = async (req, res) => {
     }
 
     const likedPosts = await Post.find({ likes: userId })
-      .select('video owner_id likes shares saves comments description tags location createdAt updatedAt')
+      .select('video owner_id likes shares saves comments description tags location createdAt updatedAt thumbnail')
       .skip((page - 1) * items)
       .limit(items);
 
@@ -168,6 +170,7 @@ const getLikedPosts = async (req, res) => {
 
       return {
         _id: post._id,
+        thumbnail: post.thumbnail || "",
         video: post.video,
         description: post.description,
         owner: { id: owner._id, name: owner.name, picture: owner.picture, fcmToken: owner.fcmToken || '' },
@@ -667,6 +670,8 @@ const populateOwner = async (post, userId) => {
 
     return {
       _id: post._id,
+      thumbnail: post.thumbnail || "",
+      video: post.video || "", // Add video field if missing
       description: post.description,
       owner: {
         id: post.owner_id,
@@ -695,7 +700,8 @@ const populateOwnerWithVideo = async (post, userId) => {
   const owner = await User.findById(post.owner_id).select("id name picture fcmToken");
   return {
     _id: post._id,
-    video: post.video || null, // Add video field if missing
+    thumbnail: post.thumbnail || "",
+    video: post.video || "", // Add video field if missing
     description: post.description,
     owner: {
       id: owner._id,
