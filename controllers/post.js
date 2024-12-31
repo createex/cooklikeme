@@ -85,7 +85,8 @@ const getUserPosts = async (req, res) => {
     }
 
     const totalPosts = await Post.countDocuments({ owner_id: userId });
-    if (totalPosts === 0) {
+    console.log("Total Posts:", totalPosts);
+    if (totalPosts === 0 || totalPosts === undefined || totalPosts === null || totalPosts === NaN || !totalPosts) {
       return res.status(200).json({
         message: "No posts found.",
         posts: [],
@@ -317,6 +318,7 @@ const getTrendingAndRandomPosts = async (req, res) => {
           $project: {
             _id: 1,
             video: 1,
+            thumbnail: 1,
             owner_id: 1,
             description: 1,
             tags: 1,
@@ -335,6 +337,7 @@ const getTrendingAndRandomPosts = async (req, res) => {
           $project: {
             _id: 1,
             video: 1,
+            thumbnail: 1,
             owner_id: 1,
             description: 1,
             tags: 1,
@@ -662,7 +665,7 @@ const populateOwner = async (post, userId) => {
     post.comments = post.comments || [];
     post.shares = post.shares || [];
     console.log(`[DEBUG] Post likes count: ${post.likes.length}, saves count: ${post.saves.length}`);
-
+    console.log('[DEBUG] Post' + JSON.stringify(post));
     // Check if the current user has liked or saved the post
     const isLiked = post.likes.some((like) => like.equals(userIdObjectId));
     const isSaved = post.saves.some((save) => save.equals(userIdObjectId));
