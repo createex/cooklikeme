@@ -302,6 +302,8 @@ const getTrendingAndRandomPosts = async (req, res) => {
     const userId = req.userId;
     const items = Math.max(1, parseInt(itemsPerPage, 10));
     const page = Math.max(1, parseInt(pageNumber, 10));
+    const ObjectId = require('mongoose').Types.ObjectId;
+    const userIdObjectId = new ObjectId(userId);
 
     const [trendingPosts, randomPosts] = await Promise.all([
       Post.aggregate([
@@ -310,9 +312,11 @@ const getTrendingAndRandomPosts = async (req, res) => {
             numLikes: { $size: { $ifNull: ['$likes', []] } },
             numShares: { $size: { $ifNull: ['$shares', []] } },
             numComments: { $size: { $ifNull: ['$comments', []] } },
+            numSaves: { $size: { $ifNull: ['$saves', []] } },
           },
         },
-        { $sort: { numLikes: -1, numShares: -1, numComments: -1, createdAt: -1 } },
+        { $sort: { numLikes: -1, numShares: -1, numComments: -1, numSaves: -1, createdAt: -1 } },
+        { $skip: (page - 1) * items },
         { $limit: items },
         {
           $project: {
@@ -325,9 +329,10 @@ const getTrendingAndRandomPosts = async (req, res) => {
             location: 1,
             createdAt: 1,
             updatedAt: 1,
-            numLikes: 1,
-            numShares: 1,
-            numComments: 1,
+            likes: 1,
+            saves: 1,
+            shares: 1,
+            comments: 1,
           },
         },
       ]),
@@ -344,19 +349,58 @@ const getTrendingAndRandomPosts = async (req, res) => {
             location: 1,
             createdAt: 1,
             updatedAt: 1,
+            likes: 1,
+            saves: 1,
+            shares: 1,
+            comments: 1,
           },
         },
       ]),
     ]);
 
+    // Combine and process posts
     const posts = [...trendingPosts, ...randomPosts];
-    const populatedPosts = await Promise.all(posts.map((post) => populateOwner(post, userId)));
+    const populatedPosts = await Promise.all(
+      posts.map(async (post) => {
+        const owner = await User.findById(post.owner_id).select('name picture fcmToken');
+        const isLiked = post.likes.some((like) => like.equals(userIdObjectId));
+        const isSaved = post.saves.some((save) => save.equals(userIdObjectId));
 
-    return res.status(200).json({ message: 'Trending and random posts fetched successfully', posts: populatedPosts });
+        return {
+          _id: post._id,
+          video: post.video || "",
+          thumbnail: post.thumbnail || "",
+          description: post.description || "",
+          owner: {
+            id: post.owner_id,
+            name: owner?.name || '',
+            picture: owner?.picture || '',
+            fcmToken: owner?.fcmToken || '',
+          },
+          tags: post.tags || [],
+          location: post.location || {},
+          likes: post.likes?.length || 0,
+          shares: post.shares?.length || 0,
+          saves: post.saves?.length || 0,
+          comments: post.comments?.length || 0,
+          isLiked,
+          isSaved,
+          createdAt: post.createdAt,
+          updatedAt: post.updatedAt,
+        };
+      })
+    );
+
+    res.status(200).json({
+      message: 'Trending and random posts fetched successfully',
+      posts: populatedPosts,
+    });
   } catch (error) {
-    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+    console.error('Error fetching trending and random posts:', error);
+    res.status(500).json({ message: 'Internal Server Error', error: error.message });
   }
 };
+
 
 
 

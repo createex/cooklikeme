@@ -90,3 +90,10 @@ module.exports.uploadVideo = (containerName, file) => {
     worker.send({ video: videoFile, containerName: containerName });
   });
 };
+
+
+
+
+
+
+
