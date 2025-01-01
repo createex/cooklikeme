@@ -248,52 +248,54 @@ const getFollowingsPosts = async (req, res) => {
     const items = Math.max(1, parseInt(itemsPerPage, 10));
     const page = Math.max(1, parseInt(pageNumber, 10));
 
-    // Find user and validate existence
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Check if user has followings
     if (!user.followings?.length) {
       return res.status(200).json({ message: 'No followings posts', posts: [] });
     }
 
-    // Retrieve posts from followings
+    const skip = (page - 1) * items;
+
     const followingPosts = await Post.find({ owner_id: { $in: user.followings } })
-      .select('video owner_id likes shares saves comments description tags location createdAt updatedAt') // Explicitly include fields
+      .select('video owner_id likes shares saves comments description tags location createdAt updatedAt')
       .sort({ createdAt: -1 })
+      .skip(skip)
       .limit(items);
 
-    // Populate owner information and include the video field
-    const posts = await Promise.all(followingPosts.map(async (post) => {
-      const owner = await User.findById(post.owner_id).select('id name picture fcmToken');
-      return {
-        _id: post._id,
-        video: post.video,
-        description: post.description,
-        owner: {
-          id: owner._id,
-          name: owner.name,
-          picture: owner.picture,
-          fcmToken: owner.fcmToken || "",
-        },
-        tags: post.tags,
-        location: post.location,
-        likes: post.likes.length,
-        shares: post.shares.length,
-        saves: post.saves.length,
-        comments: post.comments.length,
-        isLiked: post.likes.includes(userId),
-        isSaved: post.saves.includes(userId),
-        createdAt: post.createdAt,
-        updatedAt: post.updatedAt,
-      };
-    }));
+    const posts = await Promise.all(
+      followingPosts.map(async (post) => {
+        const owner = await User.findById(post.owner_id).select('id name picture fcmToken');
+        return {
+          _id: post._id,
+          video: post.video,
+          description: post.description,
+          owner: {
+            id: owner._id,
+            name: owner.name,
+            picture: owner.picture,
+            fcmToken: owner.fcmToken || "",
+          },
+          tags: post.tags,
+          location: post.location,
+          likes: post.likes.length,
+          shares: post.shares.length,
+          saves: post.saves.length,
+          comments: post.comments.length,
+          isLiked: post.likes.includes(userId),
+          isSaved: post.saves.includes(userId),
+          createdAt: post.createdAt,
+          updatedAt: post.updatedAt,
+        };
+      })
+    );
 
     return res.status(200).json({ message: 'Followings posts fetched successfully', posts });
   } catch (error) {
     return res.status(500).json({ message: 'Internal Server Error', error: error.message });
   }
 };
+
 
 // API 2: Get Trending and Random Posts
 const getTrendingAndRandomPosts = async (req, res) => {
