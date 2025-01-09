@@ -244,9 +244,9 @@ const getSavedPosts = async (req, res) => {
 const getFollowingsPosts = async (req, res) => {
   try {
     const { itemsPerPage = 10, pageNumber = 1 } = req.query;
-    const userId = req.userId;
     const items = Math.max(1, parseInt(itemsPerPage, 10));
     const page = Math.max(1, parseInt(pageNumber, 10));
+    const userId = req.userId;
 
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
@@ -300,12 +300,18 @@ const getFollowingsPosts = async (req, res) => {
 // API 2: Get Trending and Random Posts
 const getTrendingAndRandomPosts = async (req, res) => {
   try {
-    const { itemsPerPage = 10, pageNumber = 1 } = req.query;
+    const { itemsPerPage = 10, pageNumber = 1, exclude = [] } = req.query; // Added `exclude` for already fetched post IDs
     const userId = req.userId;
     const items = Math.max(1, parseInt(itemsPerPage, 10));
     const page = Math.max(1, parseInt(pageNumber, 10));
-    const ObjectId = require('mongoose').Types.ObjectId;
-    const userIdObjectId = new ObjectId(userId);
+
+    if (isNaN(items) || isNaN(page)) {
+      return res.status(400).json({ message: "Invalid pagination values." });
+    }
+
+    const skip = (page - 1) * items;
+
+    const excludedIds = exclude.map((id) => mongoose.Types.ObjectId(id));
 
     const [trendingPosts, randomPosts] = await Promise.all([
       Post.aggregate([
@@ -318,13 +324,13 @@ const getTrendingAndRandomPosts = async (req, res) => {
           },
         },
         { $sort: { numLikes: -1, numShares: -1, numComments: -1, numSaves: -1, createdAt: -1 } },
-        { $skip: (page - 1) * items },
-        { $limit: items },
+        { $match: { _id: { $nin: excludedIds } } }, // Exclude already fetched posts
+        { $skip: skip },
+        { $limit: items == 1 ? 1 : items % 2 === 0 ? items / 2 : Math.ceil(items / 2) },
         {
           $project: {
             _id: 1,
             video: 1,
-            thumbnail: 1,
             owner_id: 1,
             description: 1,
             tags: 1,
@@ -338,13 +344,23 @@ const getTrendingAndRandomPosts = async (req, res) => {
           },
         },
       ]),
-      Post.aggregate([
-        { $sample: { size: items } },
+      items != 1 ? Post.aggregate([
+        {
+          $addFields: {
+            numLikes: { $size: { $ifNull: ['$likes', []] } },
+            numShares: { $size: { $ifNull: ['$shares', []] } },
+            numComments: { $size: { $ifNull: ['$comments', []] } },
+            numSaves: { $size: { $ifNull: ['$saves', []] } },
+          },
+        },
+        { $sort: { numLikes: -1, numShares: -1, numComments: -1, numSaves: -1, createdAt: -1 } },
+        { $match: { _id: { $nin: excludedIds } } }, // Exclude already fetched posts
+        { $skip: skip },
+        { $limit: items % 2 === 0 ? items / 2 : Math.floor(items / 2) },
         {
           $project: {
             _id: 1,
             video: 1,
-            thumbnail: 1,
             owner_id: 1,
             description: 1,
             tags: 1,
@@ -357,22 +373,20 @@ const getTrendingAndRandomPosts = async (req, res) => {
             comments: 1,
           },
         },
-      ]),
+      ]) : ([]),
     ]);
 
-    // Combine and process posts
     const posts = [...trendingPosts, ...randomPosts];
     const populatedPosts = await Promise.all(
       posts.map(async (post) => {
         const owner = await User.findById(post.owner_id).select('name picture fcmToken');
-        const isLiked = post.likes.some((like) => like.equals(userIdObjectId));
-        const isSaved = post.saves.some((save) => save.equals(userIdObjectId));
+        const isLiked = post.likes.some((like) => like.equals(userId));
+        const isSaved = post.saves.some((save) => save.equals(userId));
 
         return {
           _id: post._id,
-          video: post.video || "",
-          thumbnail: post.thumbnail || "",
-          description: post.description || "",
+          video: post.video || '',
+          description: post.description || '',
           owner: {
             id: post.owner_id,
             name: owner?.name || '',
@@ -402,9 +416,6 @@ const getTrendingAndRandomPosts = async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error', error: error.message });
   }
 };
-
-
-
 
 const likePost = async (req, res) => {
   try {
