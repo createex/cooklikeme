@@ -1,5 +1,5 @@
-const nodemailer = require('nodemailer');
-const User = require('../models/User'); // Import the User model
+const nodemailer = require("nodemailer");
+const User = require("../models/user"); // Import the User model
 
 // Function to generate and send OTP
 const sendOtp = async (email) => {
@@ -15,7 +15,7 @@ const sendOtp = async (email) => {
   );
 
   if (!user) {
-    throw new Error('User not found');
+    throw new Error("User not found");
   }
 
   // Create a transporter for sending emails
@@ -29,18 +29,18 @@ const sendOtp = async (email) => {
 
   // Mail options
   const mailOptions = {
-    from: 'Cook Like Me',
+    from: "Cook Like Me",
     to: email,
-    subject: 'Your OTP for Login Verification',
-    text: `Your OTP is: ${otp}. This OTP is valid for 10 minutes.`
+    subject: "Your OTP for Login Verification",
+    text: `Your OTP is: ${otp}. This OTP is valid for 10 minutes.`,
   };
 
   try {
     // Send the email with the OTP
     // await transporter.sendMail(mailOptions);
   } catch (error) {
-    console.error('Error sending OTP:', error);
-    throw new Error('Failed to send OTP');
+    console.error("Error sending OTP:", error);
+    throw new Error("Failed to send OTP");
   }
 };
 

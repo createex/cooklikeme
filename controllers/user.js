@@ -1,9 +1,9 @@
-const bcryptjs = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const Post = require('../models/post');
-const { sendOtp, getOtp } = require('../utils/send_otp');
-const { createUserWithWallet } = require('../controllers/wallet'); // Import wallet controller
+const bcryptjs = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const User = require("../models/user");
+const Post = require("../models/post");
+const { sendOtp, getOtp } = require("../utils/send_otp");
+const { createUserWithWallet } = require("../controllers/wallet"); // Import wallet controller
 
 // User Login
 const login = async (req, res) => {
@@ -12,7 +12,7 @@ const login = async (req, res) => {
   try {
     // Check if the provided username_or_email is an email or username
     let user;
-    if (username_or_email.includes('@')) {
+    if (username_or_email.includes("@")) {
       // If it's an email, search by email
       user = await User.findOne({ email: username_or_email });
     } else {
@@ -22,45 +22,54 @@ const login = async (req, res) => {
 
     // If user is not found
     if (!user) {
-      return res.status(400).json({ message: 'User not found' });
+      return res.status(400).json({ message: "User not found" });
     }
 
-    if(fcmToken) {
-    user.fcmToken = fcmToken;
-    await user.save();
+    if (fcmToken) {
+      user.fcmToken = fcmToken;
+      await user.save();
     }
-    
+
     // Compare the password with the stored hash
     const isPasswordCorrect = await bcryptjs.compare(password, user.password);
     if (!isPasswordCorrect) {
-      return res.status(400).json({ message: 'Invalid password' });
+      return res.status(400).json({ message: "Invalid password" });
     }
 
     // Create a JWT token
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
 
-    return res.status(200).json({ message: 'Login successful', isOtpVerified: user.isOtpVerified, token, _id: user._id });
-
+    return res.status(200).json({
+      message: "Login successful",
+      isOtpVerified: user.isOtpVerified,
+      token,
+      _id: user._id,
+    });
   } catch (error) {
-    return res.status(500).json({ message: 'Something went wrong.', error });
+    return res.status(500).json({ message: "Something went wrong.", error });
   }
 };
 
 // User Sign-Up
 const signup = async (req, res) => {
-  const { email, password, username, name, picture, coverPhoto, description } = req.body;
+  const { email, password, username, name, picture, coverPhoto, description } =
+    req.body;
 
   try {
     // Check if the email is already registered
     const emailExists = await User.findOne({ email });
     if (emailExists) {
-      return res.status(400).json({ message: 'This email is already registered.' });
+      return res
+        .status(400)
+        .json({ message: "This email is already registered." });
     }
 
     // Check if the username already exists
     const usernameExists = await User.findOne({ username });
     if (usernameExists) {
-      return res.status(400).json({ message: 'This username is already taken.' });
+      return res
+        .status(400)
+        .json({ message: "This username is already taken." });
     }
 
     // Hash the password before saving it
@@ -81,12 +90,15 @@ const signup = async (req, res) => {
     const newUser = await createUserWithWallet(userData);
 
     // Generate JWT token for the new user
-    const token = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
     await sendOtp(email);
-    return res.status(201).json({ message: 'User registered successfully', token });
-
+    return res
+      .status(201)
+      .json({ message: "User registered successfully", token });
   } catch (error) {
-    return res.status(500).json({ message: 'Something went wrong.', error });
+    return res.status(500).json({ message: "Something went wrong.", error });
   }
 };
 
@@ -94,18 +106,18 @@ const sendOtpAPI = async (req, res) => {
   const { email } = req.body;
   try {
     let user;
-      user = await User.findOne({ email: email });
+    user = await User.findOne({ email: email });
 
     // If user is not found
     if (!user) {
-      return res.status(400).json({ message: 'User not found' });
+      return res.status(400).json({ message: "User not found" });
     }
     await sendOtp(email);
-    return res.status(200).json({ message: 'OTP sent successfully.' });
+    return res.status(200).json({ message: "OTP sent successfully." });
   } catch (error) {
-    return res.status(500).json({ message: 'Something went wrong.', error });
+    return res.status(500).json({ message: "Something went wrong.", error });
   }
-}
+};
 
 // Verify OTP
 const verifyOtp = async (req, res) => {
@@ -116,28 +128,31 @@ const verifyOtp = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(400).json({ message: 'User not found' });
+      return res.status(400).json({ message: "User not found" });
     }
 
     // Check if OTP exists and is not expired
     if (!user.otp || user.otpExpiry < Date.now()) {
-      return res.status(400).json({ message: 'Invalid or expired OTP' });
+      return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
     // Verify the OTP
     if (user.otp !== parseInt(otp)) {
-      return res.status(400).json({ message: 'Invalid OTP' });
+      return res.status(400).json({ message: "Invalid OTP" });
     }
 
     // OTP verified, update the user to set isOtpVerified and remove OTP
-    await User.updateOne({ email }, { 
-      $set: { isOtpVerified: true },
-      $unset: { otp: 1, otpExpiry: 1 } // Remove OTP and expiry fields
-    });
+    await User.updateOne(
+      { email },
+      {
+        $set: { isOtpVerified: true },
+        $unset: { otp: 1, otpExpiry: 1 }, // Remove OTP and expiry fields
+      }
+    );
 
-    return res.status(200).json({ message: 'OTP verified successfully' });
+    return res.status(200).json({ message: "OTP verified successfully" });
   } catch (error) {
-    return res.status(500).json({ message: 'Something went wrong.', error });
+    return res.status(500).json({ message: "Something went wrong.", error });
   }
 };
 
@@ -148,13 +163,13 @@ const forgotPassword = async (req, res) => {
   try {
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
-    await sendOtp(email);  // Send OTP for password reset
-    return res.status(200).json({ message: 'OTP sent to your email.' });
+    await sendOtp(email); // Send OTP for password reset
+    return res.status(200).json({ message: "OTP sent to your email." });
   } catch (error) {
-    return res.status(500).json({ message: 'Something went wrong.', error });
+    return res.status(500).json({ message: "Something went wrong.", error });
   }
 };
 
@@ -166,7 +181,7 @@ const resetPassword = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(400).json({ message: 'User not found' });
+      return res.status(400).json({ message: "User not found" });
     }
 
     // Hash the new password
@@ -175,15 +190,22 @@ const resetPassword = async (req, res) => {
     // Update the password using updateOne and await the operation
     await User.updateOne({ email }, { $set: { password: hashedPassword } });
 
-    return res.status(200).json({ message: 'Password reset successfully.' });
+    return res.status(200).json({ message: "Password reset successfully." });
   } catch (error) {
-    return res.status(500).json({ message: 'Something went wrong.', error });
+    return res.status(500).json({ message: "Something went wrong.", error });
   }
 };
 
-
 const createProfile = async (req, res) => {
-  const { profilePicture, name, serviceCategory, businessDetails, phoneNumber, address, postCode } = req.body;
+  const {
+    profilePicture,
+    name,
+    serviceCategory,
+    businessDetails,
+    phoneNumber,
+    address,
+    postCode,
+  } = req.body;
   const token = req.headers.authorization?.split(" ")[1]; // Assuming the token is passed in the Authorization header
 
   try {
@@ -193,7 +215,7 @@ const createProfile = async (req, res) => {
 
     // Find the existing profile
     const existingPro = await User.findById(proId);
-    
+
     if (!existingPro) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -207,7 +229,9 @@ const createProfile = async (req, res) => {
         email: existingPro.email,
         profileCreated: existingPro.profileCreated,
       };
-      return res.status(200).json({ message: "Profile already created", profile: response });
+      return res
+        .status(200)
+        .json({ message: "Profile already created", profile: response });
     }
 
     // Update profile with the provided details and mark it as created
@@ -239,15 +263,16 @@ const createProfile = async (req, res) => {
       message: "Profile created successfully",
       profile: response,
     });
-
   } catch (error) {
-    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError"
+    ) {
       return res.status(401).json({ message: "Invalid or expired token" });
     }
     return res.status(500).json({ message: "Something went wrong.", error });
   }
 };
-
 
 // Get User Verification Status
 const getUserVerificationStatus = async (req, res) => {
@@ -257,14 +282,15 @@ const getUserVerificationStatus = async (req, res) => {
     // Return only the isVerified status
     return res.status(200).json({
       status: true,
-      message: 'User verification status retrieved successfully',
+      message: "User verification status retrieved successfully",
       isOtpVerified: user.isOtpVerified,
     });
-
   } catch (error) {
-    return res.status(500).json({       
+    return res.status(500).json({
       status: false,
-      message: 'Something went wrong.', error });
+      message: "Something went wrong.",
+      error,
+    });
   }
 };
 
@@ -277,7 +303,7 @@ const getUserProfile = async (req, res) => {
     // Return user profile details
     return res.status(200).json({
       status: true,
-      message: 'User profile retrieved successfully',
+      message: "User profile retrieved successfully",
       profile: {
         username: user.username,
         email: user.email,
@@ -294,26 +320,32 @@ const getUserProfile = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       status: false,
-      message: 'Something went wrong.',
+      message: "Something went wrong.",
       error,
     });
   }
 };
 
 const updateProfile = async (req, res) => {
-  const { username, picture, coverPhoto = '', name = '', description = '' } = req.body;
+  const {
+    username,
+    picture,
+    coverPhoto = "",
+    name = "",
+    description = "",
+  } = req.body;
 
   try {
     // Check if the username is already taken by another user (other than the current one)
     const existingUser = await User.findOne({ username });
     if (existingUser && existingUser._id.toString() !== req.userId) {
-      return res.status(400).json({ message: 'Username is already taken' });  // If username is taken, return error
+      return res.status(400).json({ message: "Username is already taken" }); // If username is taken, return error
     }
 
     // Find the user by their userId (set by middleware)
     const user = await User.findById(req.userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });  // If user is not found, return error
+      return res.status(404).json({ message: "User not found" }); // If user is not found, return error
     }
 
     // Update the user profile with the provided data
@@ -328,7 +360,7 @@ const updateProfile = async (req, res) => {
 
     return res.status(200).json({
       status: true,
-      message: 'Profile updated successfully',
+      message: "Profile updated successfully",
       profile: {
         username: user.username,
         email: user.email,
@@ -341,11 +373,10 @@ const updateProfile = async (req, res) => {
         createdAt: user.createdAt,
       },
     });
-
   } catch (error) {
     return res.status(500).json({
       status: false,
-      message: 'Something went wrong while updating the profile',
+      message: "Something went wrong while updating the profile",
       error: error.message,
     });
   }
@@ -355,34 +386,44 @@ const getFollowers = async (req, res) => {
   try {
     const userId = req.userId;
 
-    const user = await User.findById(userId).populate('followers', 'id username picture followings');
+    const user = await User.findById(userId).populate(
+      "followers",
+      "id username picture followings description"
+    );
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
     const followers = user.followers.map((follower) => ({
       id: follower._id,
       username: follower.username,
       picture: follower.picture,
+      description: follower.description || "",
       youFollowed: user.followings.includes(follower._id),
     }));
 
-    return res.status(200).json({ message: 'Followers fetched successfully', followers });
+    return res
+      .status(200)
+      .json({ message: "Followers fetched successfully", followers });
   } catch (error) {
-    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error", error: error.message });
   }
 };
-
 
 const getFollowings = async (req, res) => {
   try {
     const userId = req.userId;
 
-    const user = await User.findById(userId).populate('followings', 'id name username picture followings');
+    const user = await User.findById(userId).populate(
+      "followings",
+      "id name username picture followings description"
+    );
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
     const followings = user.followings.map((following) => ({
@@ -390,15 +431,19 @@ const getFollowings = async (req, res) => {
       name: following.name,
       username: following.username,
       picture: following.picture,
+      description: following.description || "",
       followedYou: following.followings.includes(userId), // Check if the current user is in their followers list
     }));
 
-    return res.status(200).json({ message: 'Followings fetched successfully', followings });
+    return res
+      .status(200)
+      .json({ message: "Followings fetched successfully", followings });
   } catch (error) {
-    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error", error: error.message });
   }
 };
-
 
 const followOrUnfollowUser = async (req, res) => {
   try {
@@ -406,18 +451,20 @@ const followOrUnfollowUser = async (req, res) => {
     const followUserId = req.query.followUserId; // Get `followUserId` from query params
 
     if (!followUserId) {
-      return res.status(400).json({ message: 'followUserId is required' });
+      return res.status(400).json({ message: "followUserId is required" });
     }
 
     if (userId === followUserId) {
-      return res.status(400).json({ message: 'You cannot follow/unfollow yourself' });
+      return res
+        .status(400)
+        .json({ message: "You cannot follow/unfollow yourself" });
     }
 
     const user = await User.findById(userId);
     const targetUser = await User.findById(followUserId);
 
     if (!user || !targetUser) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
     const isFollowing = user.followings.includes(followUserId);
@@ -429,7 +476,7 @@ const followOrUnfollowUser = async (req, res) => {
       await user.save();
       await targetUser.save();
 
-      return res.status(200).json({ message: 'User unfollowed successfully' });
+      return res.status(200).json({ message: "User unfollowed successfully" });
     } else {
       // Follow the user
       user.followings.push(followUserId);
@@ -437,12 +484,27 @@ const followOrUnfollowUser = async (req, res) => {
       await user.save();
       await targetUser.save();
 
-      return res.status(200).json({ message: 'User followed successfully' });
+      return res.status(200).json({ message: "User followed successfully" });
     }
   } catch (error) {
-    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error", error: error.message });
   }
 };
 
-
-module.exports = { signup, verifyOtp, login, forgotPassword, resetPassword, sendOtpAPI, createProfile, getUserVerificationStatus, getUserProfile, updateProfile, getFollowers, getFollowings, followOrUnfollowUser };
+module.exports = {
+  signup,
+  verifyOtp,
+  login,
+  forgotPassword,
+  resetPassword,
+  sendOtpAPI,
+  createProfile,
+  getUserVerificationStatus,
+  getUserProfile,
+  updateProfile,
+  getFollowers,
+  getFollowings,
+  followOrUnfollowUser,
+};

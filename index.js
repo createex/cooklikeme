@@ -1,14 +1,20 @@
-const express = require('express');
-const config = require('./config/config');
-const connectDB = require('./config/db');
-const userRoutes = require('./routes/user');
-const postRoutes = require('./routes/post');
-const notificationRoutes = require('./routes/notification');
-const stripeRoutes = require('./routes/stripe');
-const storiesRoutes = require('./routes/story');
-const uploadRoutes = require('./routes/upload');
+const express = require("express");
+const config = require("./config/config");
+const connectDB = require("./config/db");
+const userRoutes = require("./routes/user");
+const postRoutes = require("./routes/post");
+const notificationRoutes = require("./routes/notification");
+const stripeRoutes = require("./routes/stripe");
+const storiesRoutes = require("./routes/story");
+const uploadRoutes = require("./routes/upload");
+const http = require("http");
+const socketIO = require("socket.io");
 
 const app = express();
+require("dotenv").config();
+
+const server = http.createServer(app);
+const io = socketIO(server);
 
 // Middleware
 app.use(express.json());
@@ -17,20 +23,20 @@ app.use(express.json());
 connectDB();
 
 // Routes
-app.use('/api/users', userRoutes);
-app.use('/api/post', postRoutes);
-app.use('/api/notification', notificationRoutes);
-app.use('/api/stripe', stripeRoutes);
-app.use('/api/story', storiesRoutes);
-app.use('/api/upload', uploadRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/post", postRoutes);
+app.use("/api/notification", notificationRoutes);
+app.use("/api/stripe", stripeRoutes);
+app.use("/api/story", storiesRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // Base route
-app.get('/', (req, res) => res.send('Hello from Node API server'));
+app.get("/", (req, res) => res.send("Hello from Node API server"));
 
 // Handle 404 errors
-app.use((req, res) => res.status(404).send('Route not found'));
+app.use((req, res) => res.status(404).send("Route not found"));
 
 // Start the server
-app.listen(config.PORT, () => {
+server.listen(config.PORT, () => {
   console.log(`Server running on port ${config.PORT}`);
 });
