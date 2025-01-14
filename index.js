@@ -7,15 +7,21 @@ const notificationRoutes = require("./routes/notification");
 const stripeRoutes = require("./routes/stripe");
 const storiesRoutes = require("./routes/story");
 const uploadRoutes = require("./routes/upload");
+const chatRoutes = require("./routes/chatRoutes");
 const http = require("http");
-const socketIO = require("socket.io");
-
+const { Server } = require("socket.io");
+const { socketServices } = require("./utils/socketService");
 const app = express();
 require("dotenv").config();
 
 const server = http.createServer(app);
-const io = socketIO(server);
-
+//socket connection
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
+socketServices(io);
 // Middleware
 app.use(express.json());
 
@@ -29,6 +35,7 @@ app.use("/api/notification", notificationRoutes);
 app.use("/api/stripe", stripeRoutes);
 app.use("/api/story", storiesRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/chat", chatRoutes);
 
 // Base route
 app.get("/", (req, res) => res.send("Hello from Node API server"));

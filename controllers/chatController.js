@@ -6,13 +6,14 @@ const User = require("../models/user");
 // Get user's conversations
 exports.getConversation = async (req, res) => {
   try {
-    const userId = req.user.id; // Assuming auth middleware sets req.user
+    const userId = req.userId; // Assuming auth middleware sets req.user
 
     const conversations = await Conversation.find({
       participants: userId,
     })
-      .populate("participants", "name avatar")
-      .populate("lastMessage")
+      .populate("participants", "name picture")
+      .populate("lastMessage", "content createdAt read")
+      .select("participants lastMessage lastMessageTimestamp")
       .sort({ lastMessageTimestamp: -1 });
 
     res.json(conversations);
@@ -23,61 +24,60 @@ exports.getConversation = async (req, res) => {
 // Get messages for a specific conversation
 exports.getMessages = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { otherUserId } = req.params;
+    const userId = req.userId;
+    const { conversationId } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation || !conversation.participants.includes(userId)) {
+      return res
+        .status(403)
+        .json({ error: "Not authorized to view this conversation" });
+    }
 
     const messages = await Message.find({
-      $or: [
-        { sender: userId, receiver: otherUserId },
-        { sender: otherUserId, receiver: userId },
-      ],
+      conversation: conversationId,
     })
+      .select("-__v -updatedAt -conversation")
+      .populate("sender", "name picture")
+      .populate("receiver", "name picture")
       .sort({ createdAt: -1 })
-      .limit(50); // Pagination can be added here
+      .skip(skip)
+      .limit(limit);
+
+    const totalMessages = await Message.countDocuments({
+      conversation: conversationId,
+    });
+
+    // Add sentByYou field to each message
+    const messagesWithSentByYou = messages.map((message) => ({
+      ...message.toObject(),
+      sentByYou: message.sender._id.toString() === userId.toString(),
+    }));
 
     // Mark messages as read
     await Message.updateMany(
       {
-        sender: otherUserId,
+        conversation: conversationId,
         receiver: userId,
         read: false,
       },
       { read: true }
     );
 
-    res.json(messages);
-  } catch (error) {
-    res.status(500).json({ error: "Server error" });
-  }
-};
-// Send a new message (HTTP fallback)
-exports.sendMessage = async (req, res) => {
-  try {
-    const { receiverId, content } = req.body;
-    const senderId = req.user.id;
-
-    const message = await Message.create({
-      sender: senderId,
-      receiver: receiverId,
-      content,
+    res.json({
+      message: "Messages retrieved successfully",
+      messages: messagesWithSentByYou,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalMessages / limit),
+        totalMessages,
+        hasMore: skip + messages.length < totalMessages,
+      },
     });
-
-    // Update conversation
-    await Conversation.findOneAndUpdate(
-      {
-        participants: { $all: [senderId, receiverId] },
-      },
-      {
-        $set: {
-          lastMessage: message._id,
-          lastMessageTimestamp: new Date(),
-        },
-      },
-      { upsert: true }
-    );
-
-    res.json(message);
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
-};
+}; // Send a new message (HTTP fallback)

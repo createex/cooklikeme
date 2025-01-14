@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 // Conversation Schema (to track conversations between users)
 const conversationSchema = new mongoose.Schema(
   {
@@ -18,4 +20,4 @@ const conversationSchema = new mongoose.Schema(
   }
 );
 
-const Conversation = mongoose.model("Conversation", conversationSchema);
+module.exports = mongoose.model("Conversation", conversationSchema);
