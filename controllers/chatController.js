@@ -37,7 +37,7 @@ exports.getConversation = async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
-}; // Get messages for a specific conversation
+}; // Get messages for a specific conversation..
 exports.getMessages = async (req, res) => {
   try {
     const userId = req.userId;
