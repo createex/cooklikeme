@@ -7,6 +7,9 @@ const User = require("../models/user");
 exports.getConversation = async (req, res) => {
   try {
     const userId = req.userId; // Assuming auth middleware sets req.user
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
 
     const conversations = await Conversation.find({
       participants: userId,
@@ -14,14 +17,27 @@ exports.getConversation = async (req, res) => {
       .populate("participants", "name picture")
       .populate("lastMessage", "content createdAt read")
       .select("participants lastMessage lastMessageTimestamp")
-      .sort({ lastMessageTimestamp: -1 });
+      .sort({ lastMessageTimestamp: -1 })
+      .skip(skip)
+      .limit(limit);
 
-    res.json(conversations);
+    const totalConversations = await Conversation.countDocuments({
+      participants: userId,
+    });
+
+    res.json({
+      conversations,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalConversations / limit),
+        totalItems: totalConversations,
+        hasMore: page * limit < totalConversations,
+      },
+    });
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
-};
-// Get messages for a specific conversation
+}; // Get messages for a specific conversation
 exports.getMessages = async (req, res) => {
   try {
     const userId = req.userId;
