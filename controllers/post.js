@@ -671,6 +671,7 @@ const getComments = async (req, res) => {
   try {
     const { postId, parentCommentId } = req.query;
     const { itemsPerPage = 10, pageNumber = 1 } = req.query;
+    console.log(postId);
 
     if (!postId) {
       return res.status(400).json({ message: "Post ID is required" });
@@ -740,14 +741,13 @@ const getComments = async (req, res) => {
     }
 
     // Fetching main comments for the post (no replies)
-    const commentsQuery = { post_id: postId, replies: { $exists: false } };
+    const commentsQuery = { post_id: postId, replies: { $size: 0 } };
 
     // Get total main comments for the post
     const totalComments = await Comment.countDocuments({
       post_id: postId,
-      replies: { $exists: false },
+      replies: { $size: 0 },
     });
-
     // Fetch main comments with pagination and populate owner details and replies
     const comments = await Comment.find(commentsQuery)
       .skip((page - 1) * items)
@@ -762,7 +762,6 @@ const getComments = async (req, res) => {
         },
       })
       .lean();
-
     console.log("Main comments fetched:", comments); // Debug the main comments
 
     // Process the main comments and return the necessary fields
