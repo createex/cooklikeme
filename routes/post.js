@@ -38,4 +38,7 @@ router.post('/comment', postController.commentOnPost);
 //Comment on a post
 router.get('/comments', postController.getComments);
 
+// Like / Unlike comment
+router.post('/like-comment', postController.likeComment);
+
 module.exports = router;

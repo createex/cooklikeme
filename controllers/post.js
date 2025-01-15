@@ -668,158 +668,143 @@ const commentOnPost = async (req, res) => {
 };
 
 const getComments = async (req, res) => {
-  try {
-    const { postId, parentCommentId } = req.query;
-    const { itemsPerPage = 10, pageNumber = 1 } = req.query;
-    console.log(postId);
+  const { postId, parentCommentId } = req.query;
+  const { itemsPerPage = 10, pageNumber = 1 } = req.query;
+  const userId = req.userId;  // assuming the userId is available in req.userId from authentication
 
-    if (!postId) {
-      return res.status(400).json({ message: "Post ID is required" });
-    }
+  // Debugging input parameters
+  console.log("Request received with the following parameters:");
+  console.log(`postId: ${postId}, parentCommentId: ${parentCommentId}, itemsPerPage: ${itemsPerPage}, pageNumber: ${pageNumber}`);
 
-    const items = Math.max(1, parseInt(itemsPerPage, 10));
-    const page = Math.max(1, parseInt(pageNumber, 10));
-    if (isNaN(items) || isNaN(page)) {
-      return res.status(400).json({ message: "Invalid pagination values" });
-    }
+  let comments;
+  let totalComments;
 
-    // If parentCommentId is provided, fetch replies for that comment
-    if (parentCommentId) {
-      console.log("Fetching replies for parent comment:", parentCommentId);
+  if (!parentCommentId) {
+    // Case when parentCommentId is not provided: Get main comments (comments not inside any replies array)
+    console.log("Fetching main comments (no parentCommentId provided)...");
 
-      // Get the comment with the specific parentCommentId and populate replies
-      const parentComment = await Comment.findOne({
-        post_id: postId,
-        _id: parentCommentId,
-      })
-        .populate("owner_id", "name email _id profile_picture fcmToken") // Populate owner details with profile_picture
-        .populate({
-          path: "replies",
-          populate: {
-            path: "owner_id",
-            select: "name email _id profile_picture fcmToken",
-          },
-        })
-        .lean();
-
-      console.log("Parent comment fetched:", parentComment); // Debug the parent comment
-
-      if (!parentComment) {
-        return res.status(404).json({ message: "Parent comment not found" });
-      }
-
-      // Process replies and log the replies data
-      const processedReplies = parentComment.replies.map((reply) => {
-        console.log("Reply before mapping:", reply); // Debug each reply
-
-        return {
-          _id: reply._id,
-          post_id: reply.post_id,
-          owner_id: {
-            _id: reply.owner_id._id,
-            name: reply.owner_id.name,
-            profile_picture: reply.owner_id.profile_picture || "",
-            fcmToken: reply.owner_id.fcmToken || "",
-          },
-          text: reply.text,
-          likesCount: reply.likes.length,
-          repliesCount: reply.replies ? reply.replies.length : 0,
-          createdAt: reply.createdAt,
-        };
-      });
-
-      return res.status(200).json({
-        message: "Replies fetched successfully",
-        replies: processedReplies,
-        pagination: {
-          totalItems: processedReplies.length,
-          totalPages: Math.ceil(processedReplies.length / items),
-          currentPage: page,
-          itemsPerPage: items,
-        },
-      });
-    }
-
-    // Fetching main comments for the post (no replies)
-    const commentsQuery = { post_id: postId, replies: { $size: 0 } };
-
-    // Get total main comments for the post
-    const totalComments = await Comment.countDocuments({
-      post_id: postId,
-      replies: { $size: 0 },
-    });
-    // Fetch main comments with pagination and populate owner details and replies
-    const comments = await Comment.find(commentsQuery)
-      .skip((page - 1) * items)
-      .limit(items)
-      .sort({ createdAt: -1 }) // Sort by latest
-      .populate("owner_id", "name email _id profile_picture") // Populate owner details with profile_picture
-      .populate({
-        path: "replies",
-        populate: {
-          path: "owner_id",
-          select: "name email _id profile_picture", // Populate owner details for replies with profile_picture
-        },
-      })
+    comments = await Comment.find({ post_id: postId })
+      .skip((pageNumber - 1) * itemsPerPage) // Pagination based on the pageNumber and itemsPerPage per page
+      .limit(itemsPerPage)
+      .sort({ createdAt: -1 })
+      .populate("owner_id", "name email _id profile_picture")
       .lean();
-    console.log("Main comments fetched:", comments); // Debug the main comments
 
-    // Process the main comments and return the necessary fields
-    const processedComments = comments.map((comment) => {
-      console.log("Comment before mapping:", comment); // Debug each comment
+    console.log(`Fetched ${comments.length} main comments.`);
 
-      return {
-        _id: comment._id,
-        post_id: comment.post_id,
-        owner_id: {
-          _id: comment.owner_id._id,
-          name: comment.owner_id.name,
-          email: comment.owner_id.email,
-          profile_picture: comment.owner_id.profile_picture || "", // Return empty string if no profile picture
-        },
-        text: comment.text,
-        likesCount: comment.likes.length,
-        repliesCount: comment.replies ? comment.replies.length : 0,
-        createdAt: comment.createdAt,
-        replies: comment.replies
-          ? comment.replies.map((reply) => {
-              console.log("Reply before mapping:", reply); // Debug each reply inside comment
-
-              return {
-                _id: reply._id,
-                post_id: reply.post_id,
-                owner_id: {
-                  _id: reply.owner_id._id,
-                  name: reply.owner_id.name,
-                  email: reply.owner_id.email,
-                  profile_picture: reply.owner_id.profile_picture || "", // Return empty string if no profile picture
-                },
-                text: reply.text,
-                likesCount: reply.likes.length,
-                repliesCount: reply.replies ? reply.replies.length : 0,
-                createdAt: reply.createdAt,
-              };
-            })
-          : [],
-      };
+    // Filter out main comments (comments whose IDs are not in any replies array)
+    comments = comments.filter(comment => {
+      return !comments.some(otherComment => {
+        return otherComment.replies && otherComment.replies.some(reply => reply._id.toString() === comment._id.toString());
+      });
     });
 
+    console.log(`After filtering, remaining main comments: ${comments.length}`);
+
+    totalComments = await Comment.countDocuments({ post_id: postId });
+    console.log(`Total main comments count: ${totalComments}`);
+
+    // Response structure for main comments
     return res.status(200).json({
       message: "Comments fetched successfully",
-      totalComments,
-      comments: processedComments,
+      totalComments: totalComments, // Ensure totalComments reflects the full count, not the filtered count
+      comments: comments.map(comment => ({
+        _id: comment._id,
+        post_id: comment.post_id,
+        owner_id: comment.owner_id,
+        text: comment.text,
+        likesCount: comment.likesCount,
+        repliesCount: comment.replies ? comment.replies.length : 0,
+        isLiked: comment.likes.some(like => like.equals(userId)),  // Check if the user has liked this comment
+        createdAt: comment.createdAt
+      })),
       pagination: {
         totalItems: totalComments,
-        totalPages: Math.ceil(totalComments / items),
-        currentPage: page,
-        itemsPerPage: items,
-      },
+        totalPages: Math.ceil(totalComments / itemsPerPage),
+        currentPage: pageNumber,
+        itemsPerPage: itemsPerPage
+      }
     });
-  } catch (error) {
-    console.error("Error occurred:", error); // Log the error
-    return res
-      .status(500)
-      .json({ message: "Internal Server Error", error: error.message });
+  } else {
+    // Case when parentCommentId is provided: Get comments that are replies to this parent comment
+    console.log(`Fetching replies to parent comment with ID: ${parentCommentId}`);
+
+    const parentComment = await Comment.findById(parentCommentId);
+    if (!parentComment) {
+      console.log("Parent comment not found.");
+      return res.status(404).json({ message: "Parent comment not found", comments: [] });
+    }
+
+    console.log(`Found parent comment with ${parentComment.replies.length} replies.`);
+
+    // Get all replies to the parent comment
+    const repliesToParent = parentComment.replies.map(reply => reply._id);
+    console.log(`Replies to parent comment: ${repliesToParent}`);
+
+    totalComments = repliesToParent.length;
+
+    comments = await Comment.find({ post_id: postId, _id: { $in: repliesToParent } })
+      .skip((pageNumber - 1) * itemsPerPage)
+      .limit(itemsPerPage)
+      .sort({ createdAt: -1 })
+      .populate("owner_id", "name email _id profile_picture")
+      .lean();
+
+    console.log(`Fetched ${comments.length} replies.`);
+
+    // Response structure for sub-comments (replies)
+    return res.status(200).json({
+      message: "Comment replies fetched successfully",
+      totalComments: totalComments,
+      comments: comments.map(comment => ({
+        _id: comment._id,
+        post_id: comment.post_id,
+        owner_id: comment.owner_id,
+        text: comment.text,
+        likesCount: comment.likesCount,
+        repliesCount: comment.replies ? comment.replies.length : 0,
+        isLiked: comment.likes.some(like => like.equals(userId)),  // Check if the user has liked this comment
+        createdAt: comment.createdAt
+      })),
+      pagination: {
+        totalItems: totalComments,
+        totalPages: Math.ceil(totalComments / itemsPerPage),
+        currentPage: pageNumber,
+        itemsPerPage: itemsPerPage
+      }
+    });
+  }
+};
+
+const likeComment = async (req, res) => {
+  try {
+    const { commentId } = req.query;
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const comment = await Comment.findById(commentId);
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    const likeIndex = comment.likes.indexOf(userId);
+
+    if (likeIndex === -1) {
+      // Add user to likes if not already liked
+      comment.likes.push(userId);
+      await comment.save();
+      return res.status(200).json({ message: "Comment liked successfully" });
+    } else {
+      // Remove user from likes if already liked (unlike)
+      comment.likes.splice(likeIndex, 1);
+      await comment.save();
+      return res.status(200).json({ message: "Comment unliked successfully" });
+    }
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
   }
 };
 
@@ -835,6 +820,7 @@ module.exports = {
   getTrendingAndRandomPosts,
   getFollowingsPosts,
   getComments,
+  likeComment
 };
 
 //Helpers
