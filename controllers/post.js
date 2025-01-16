@@ -769,6 +769,7 @@ const getComments = async (req, res) => {
         likesCount: comment.likes.length || 0,
         repliesCount: comment.replies ? comment.replies.length : 0,
         isLiked: comment.likes.some(like => like.equals(userId)),  // Check if the user has liked this comment
+        parentCommentId: parentCommentId,
         createdAt: comment.createdAt
       })),
       pagination: {
