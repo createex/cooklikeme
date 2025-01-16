@@ -649,6 +649,11 @@ const commentOnPost = async (req, res) => {
     if (replyToCommentId) {
       // If it's a reply, find the parent comment and add this comment to its replies
       const parentComment = await Comment.findById(replyToCommentId);
+      const match = parentComment.post_id.toString() === postId.toString();
+      if(!match)
+      {
+        return res.status(400).json({ message: "Parent Comment does not belong to this post" });
+      }
       if (parentComment) {
         parentComment.replies.push(savedComment._id); // Add the new comment to the replies
         await parentComment.save();
@@ -743,7 +748,7 @@ const getComments = async (req, res) => {
 
     totalComments = repliesToParent.length;
 
-    comments = await Comment.find({ post_id: postId, _id: { $in: repliesToParent } })
+    comments = await Comment.find({ _id: { $in: repliesToParent } })
       .skip((pageNumber - 1) * itemsPerPage)
       .limit(itemsPerPage)
       .sort({ createdAt: -1 })
