@@ -1,51 +1,94 @@
+const { text } = require("express");
 const Conversation = require("../models/conversation");
 const Message = require("../models/message");
 const User = require("../models/user");
 
-// API Routes
-// Get user's conversations
-exports.getConversation = async (req, res) => {
+exports.getConversations = async (req, res) => {
   try {
-    const userId = req.userId; // Assuming auth middleware sets req.user
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
+    const userId = req.userId; // Extracted from auth token
 
-    const conversations = await Conversation.find({
-      participants: userId,
+    // Fetch all messages involving the user
+    const messages = await Message.find({
+      $or: [{ sender: userId }, { receiver: userId }]
     })
-      .populate("participants", "name picture")
-      .populate("lastMessage", "content createdAt read")
-      .select("participants lastMessage lastMessageTimestamp")
-      .sort({ lastMessageTimestamp: -1 })
-      .skip(skip)
-      .limit(limit);
+      .sort({ createdAt: -1 }) // Sort by recent messages
+      .lean();
 
-    const totalConversations = await Conversation.countDocuments({
-      participants: userId,
+    const conversationsMap = {};
+
+    // Group messages by conversation and collect details
+    messages.forEach((msg) => {
+      const convId = msg.conversation.toString();
+      if (!conversationsMap[convId]) {
+        conversationsMap[convId] = {
+          conversationId: convId,
+          lastMessage: msg.content,
+          lastMessageTime: msg.createdAt,
+          // lastMessageRead: msg.receiver.toString() === userId ? msg.read : true,
+          opponentId:
+            msg.sender.toString() === userId ? msg.receiver : msg.sender,
+          unreadCount: 0,
+        };
+      }
+      if (
+        msg.receiver.toString() === userId &&
+        !msg.read
+      ) {
+        conversationsMap[convId].unreadCount++;
+      }
     });
 
-    res.json({
-      conversations,
-      pagination: {
-        currentPage: page,
-        totalPages: Math.ceil(totalConversations / limit),
-        totalItems: totalConversations,
-        hasMore: page * limit < totalConversations,
+    const conversations = Object.values(conversationsMap);
+
+    // Fetch opponent details
+    const opponentIds = conversations.map((c) => c.opponentId);
+    const opponents = await User.find({ _id: { $in: opponentIds } })
+      .select("name picture")
+      .lean();
+
+    // Map opponent details to conversations
+    const opponentsMap = {};
+    opponents.forEach((opponent) => {
+      opponentsMap[opponent._id] = opponent;
+    });
+
+    const formattedConversations = conversations.map((conv) => ({
+      ...conv,
+      opponent: {
+        id: conv.opponentId, // Include opponent ID inside the opponent object
+        name: opponentsMap[conv.opponentId]?.name || "",
+        picture: opponentsMap[conv.opponentId]?.picture || "",
       },
+    }));
+
+    // Remove opponentId from each conversation object
+    const finalConversations = formattedConversations.map((conv) => {
+      const { opponentId, ...rest } = conv;
+      return rest;
     });
+
+    // Sort conversations by lastMessageTime
+    finalConversations.sort(
+      (a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+    );
+
+    res.status(200).json({ status: "success", data: finalConversations });
   } catch (error) {
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ status: "error", message: error.message });
   }
-}; // Get messages for a specific conversation..
+};
+
+
+
 exports.getMessages = async (req, res) => {
   try {
     const userId = req.userId;
-    const { conversationId } = req.params;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
-    const skip = (page - 1) * limit;
+    const { conversationId } = req.query;
+    const pageNumber = parseInt(req.query.pageNumber) || 1;
+    const itemsPerPage = parseInt(req.query.itemsPerPage) || 50;
+    const skip = (pageNumber - 1) * itemsPerPage;
 
+    // Check if the user is authorized to view this conversation
     const conversation = await Conversation.findById(conversationId);
     if (!conversation || !conversation.participants.includes(userId)) {
       return res
@@ -53,25 +96,29 @@ exports.getMessages = async (req, res) => {
         .json({ error: "Not authorized to view this conversation" });
     }
 
+    // Fetch messages for the conversation
     const messages = await Message.find({
       conversation: conversationId,
     })
       .select("-__v -updatedAt -conversation")
-      .populate("sender", "name picture")
-      .populate("receiver", "name picture")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(itemsPerPage);
 
     const totalMessages = await Message.countDocuments({
       conversation: conversationId,
     });
 
-    // Add sentByYou field to each message
-    const messagesWithSentByYou = messages.map((message) => ({
-      ...message.toObject(),
-      sentByYou: message.sender._id.toString() === userId.toString(),
-    }));
+    // Process messages: Remove sender, receiver, and read fields
+    const messagesWithSentByYou = messages.map((message) => {
+      const { _id, content, createdAt } = message.toObject();
+      return {
+        _id,
+        text: content,
+        createdAt,
+        sentByYou: message.sender.toString() === userId.toString(),
+      };
+    });
 
     // Mark messages as read
     await Message.updateMany(
@@ -83,12 +130,13 @@ exports.getMessages = async (req, res) => {
       { read: true }
     );
 
+    // Respond with the messages and pagination
     res.json({
       message: "Messages retrieved successfully",
       messages: messagesWithSentByYou,
       pagination: {
-        currentPage: page,
-        totalPages: Math.ceil(totalMessages / limit),
+        currentPage: pageNumber,
+        totalPages: Math.ceil(totalMessages / itemsPerPage),
         totalMessages,
         hasMore: skip + messages.length < totalMessages,
       },
@@ -96,4 +144,48 @@ exports.getMessages = async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
-}; // Send a new message (HTTP fallback)
+};
+
+exports.sendMessage = async (req, res) => {
+  try {
+    const senderId = req.userId;
+    const { conversationId } = req.query;
+    const { text } = req.body;
+
+    // Validate required fields
+    if (!conversationId || !text) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+
+    // Check if the conversation exists
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    // Determine the receiver based on participants
+    const receiverId = conversation.participants.find(
+      (participant) => participant.toString() !== senderId.toString()
+    );
+
+    if (!receiverId) {
+      return res.status(403).json({ error: "Not authorized to send a message in this conversation" });
+    }
+
+    // Create and save the message
+    const message = new Message({
+      conversation: conversationId,
+      sender: senderId,
+      receiver: receiverId,
+      content: text,
+    });
+
+    await message.save();
+
+    res.status(201).json({
+      message: "Message sent successfully"
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Unable to send message" });
+  }
+};

@@ -4,11 +4,13 @@ const { userMiddleware } = require("../middleWares/user");
 
 const {
   getMessages,
-  getConversation,
+  getConversations,
+  sendMessage
 } = require("../controllers/chatController");
 
 router.use(userMiddleware);
 // Chat routes
-router.get("/conversations", getConversation);
-router.get("/messages/:conversationId", getMessages);
+router.get("/conversations", getConversations);
+router.get("/messages", getMessages);
+router.post("/send", sendMessage);
 module.exports = router;

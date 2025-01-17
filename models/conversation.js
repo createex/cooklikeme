@@ -1,22 +1,21 @@
 const mongoose = require("mongoose");
 
-// Conversation Schema (to track conversations between users)
 const conversationSchema = new mongoose.Schema(
   {
     participants: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
+        required: true,
       },
     ],
     lastMessage: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Message",
     },
-    lastMessageTimestamp: Date,
   },
   {
-    timestamps: true,
+    timestamps: true, // Automatically adds createdAt and updatedAt fields
   }
 );
 
