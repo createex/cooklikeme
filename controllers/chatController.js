@@ -149,32 +149,35 @@ exports.getMessages = async (req, res) => {
 exports.sendMessage = async (req, res) => {
   try {
     const senderId = req.userId;
-    const { conversationId } = req.query;
+    const { receiverId } = req.query; // Get receiverId from the query
     const { text } = req.body;
 
     // Validate required fields
-    if (!conversationId || !text) {
-      return res.status(400).json({ error: "All fields are required" });
+    if (!receiverId || !text) {
+      return res.status(400).json({ error: "Receiver ID and text are required" });
     }
 
-    // Check if the conversation exists
-    const conversation = await Conversation.findById(conversationId);
+    const receiver = await User.findById(receiverId);
+    if (!receiver) {
+      return res.status(404).json({ error: "Receiver not found" });
+    }
+    
+    // Check if a conversation already exists between sender and receiver
+    let conversation = await Conversation.findOne({
+      participants: { $all: [senderId, receiverId] }, // Check for both participants
+    });
+
+    // If no conversation exists, create a new one
     if (!conversation) {
-      return res.status(404).json({ error: "Conversation not found" });
-    }
-
-    // Determine the receiver based on participants
-    const receiverId = conversation.participants.find(
-      (participant) => participant.toString() !== senderId.toString()
-    );
-
-    if (!receiverId) {
-      return res.status(403).json({ error: "Not authorized to send a message in this conversation" });
+      conversation = new Conversation({
+        participants: [senderId, receiverId],
+      });
+      await conversation.save();
     }
 
     // Create and save the message
     const message = new Message({
-      conversation: conversationId,
+      conversation: conversation._id,
       sender: senderId,
       receiver: receiverId,
       content: text,
@@ -182,10 +185,15 @@ exports.sendMessage = async (req, res) => {
 
     await message.save();
 
+    // Update the conversation's last message
+    conversation.lastMessage = message._id;
+    await conversation.save();
+
     res.status(201).json({
-      message: "Message sent successfully"
+      message: "Message sent successfully",
+      conversationId: conversation._id,
     });
   } catch (error) {
-    res.status(500).json({ error: "Unable to send message" });
+    res.status(500).json({ error: "Unable to send message", details: error.message });
   }
 };

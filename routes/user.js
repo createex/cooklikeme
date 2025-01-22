@@ -32,6 +32,9 @@ router.get('/user-verified', proController.getUserVerificationStatus);
 // Get User Profile
 router.get('/user-profile', proController.getUserProfile);
 
+// Get Other User Profile
+router.get('/other-user-profile', proController.getOtherUserProfile);
+
 // Update User Profile (only accessible if the user is authenticated)
 router.put('/update-profile', proController.updateProfile);
 

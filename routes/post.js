@@ -17,6 +17,9 @@ router.get('/get-trending-posts', postController.getTrendingAndRandomPosts);
 // Get posts of the user
 router.get('/user-posts', postController.getUserPosts);
 
+//Get posts of other user
+router.get('/other-user-posts', postController.getOtherUserPosts);
+
 // Get liked posts by user
 router.get('/liked-posts', postController.getLikedPosts);
 

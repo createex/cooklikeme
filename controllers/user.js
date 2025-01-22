@@ -4,6 +4,7 @@ const User = require("../models/user");
 const Post = require("../models/post");
 const { sendOtp, getOtp } = require("../utils/send_otp");
 const { createUserWithWallet } = require("../controllers/wallet"); // Import wallet controller
+const mongoose = require("mongoose");
 
 // User Login
 const login = async (req, res) => {
@@ -326,6 +327,48 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+// User Controller: getUserProfile
+const getOtherUserProfile = async (req, res) => {
+  try {
+    // Fetch the user by userId that is already set by the userMiddleware
+    const userId = req.query.userId;
+    const user = await User.findById(userId);
+
+    if(!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    const posts = await Post.find({ owner_id: userId });
+
+    // Return user profile details
+    return res.status(200).json({
+      status: true,
+      message: "User profile retrieved successfully",
+      profile: {
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+        coverPhoto: user.coverPhoto,
+        description: user.description,
+        posts: posts.length,
+        followers: user.followers,
+        followings: user.followings,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: false,
+      message: "Something went wrong: " + error,
+      error,
+    });
+  }
+};
+
 const updateProfile = async (req, res) => {
   const {
     username,
@@ -507,4 +550,5 @@ module.exports = {
   getFollowers,
   getFollowings,
   followOrUnfollowUser,
+  getOtherUserProfile
 };

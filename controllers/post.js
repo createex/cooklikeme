@@ -171,6 +171,102 @@ const getUserPosts = async (req, res) => {
   }
 };
 
+const getOtherUserPosts = async (req, res) => {
+  try {
+    const { itemsPerPage = 10, pageNumber = 1, userId } = req.query;
+    const items = Math.max(1, parseInt(itemsPerPage, 10));
+    const page = Math.max(1, parseInt(pageNumber, 10));
+
+    if(userId === undefined || userId === null || userId === "") {
+      return res.status(400).json({ message: "Invalid user ID." });
+    }
+
+    if (isNaN(items) || isNaN(page)) {
+      return res.status(400).json({ message: "Invalid pagination values." });
+    }
+
+    const totalPosts = await Post.countDocuments({ owner_id: userId });
+    console.log("Total Posts:", totalPosts);
+    if (
+      totalPosts === 0 ||
+      totalPosts === undefined ||
+      totalPosts === null ||
+      totalPosts === NaN ||
+      !totalPosts
+    ) {
+      return res.status(200).json({
+        message: "No posts found.",
+        posts: [],
+        pagination: {
+          totalItems: 0,
+          totalPages: 0,
+          currentPage: page,
+          itemsPerPage: items,
+        },
+      });
+    }
+
+    const totalPages = Math.ceil(totalPosts / items);
+    if (page > totalPages) {
+      return res
+        .status(400)
+        .json({ message: `Page number exceeds total pages (${totalPages}).` });
+    }
+
+    const userPosts = await Post.find({ owner_id: userId })
+      .select(
+        "video owner_id likes shares saves comments description tags location createdAt updatedAt thumbnail"
+      )
+      .skip((page - 1) * items)
+      .limit(items);
+
+    const posts = await Promise.all(
+      userPosts.map(async (post) => {
+        const owner = await User.findById(post.owner_id).select(
+          "id name picture fcmToken"
+        );
+        return {
+          _id: post._id,
+          thumbnail: post.thumbnail || "",
+          video: post.video,
+          description: post.description,
+          owner: {
+            id: owner._id,
+            name: owner.name,
+            picture: owner.picture,
+            fcmToken: owner.fcmToken || "",
+          },
+          tags: post.tags,
+          location: post.location,
+          likes: post.likes.length,
+          shares: post.shares.length,
+          saves: post.saves.length,
+          comments: post.comments.length,
+          isLiked: post.likes.includes(req.userId),
+          isSaved: post.saves.includes(req.userId),
+          createdAt: post.createdAt,
+          updatedAt: post.updatedAt,
+        };
+      })
+    );
+
+    return res.status(200).json({
+      message: "Posts fetched successfully",
+      posts,
+      pagination: {
+        totalPosts,
+        totalPages,
+        currentPage: page,
+        itemsPerPage: items,
+      },
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error", error: error.message });
+  }
+};
+
 const getLikedPosts = async (req, res) => {
   try {
     const { itemsPerPage = 10, pageNumber = 1 } = req.query;
@@ -826,7 +922,8 @@ module.exports = {
   getTrendingAndRandomPosts,
   getFollowingsPosts,
   getComments,
-  likeComment
+  likeComment,
+  getOtherUserPosts
 };
 
 //Helpers
