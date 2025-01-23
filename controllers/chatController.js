@@ -27,15 +27,15 @@ exports.getConversations = async (req, res) => {
           // lastMessageRead: msg.receiver.toString() === userId ? msg.read : true,
           opponentId:
             msg.sender.toString() === userId ? msg.receiver : msg.sender,
-          unreadCount: 0,
+          // unreadCount: 0,
         };
       }
-      if (
-        msg.receiver.toString() === userId &&
-        !msg.read
-      ) {
-        conversationsMap[convId].unreadCount++;
-      }
+      // if (
+      //   msg.receiver.toString() === userId &&
+      //   !msg.read
+      // ) {
+      //   conversationsMap[convId].unreadCount++;
+      // }
     });
 
     const conversations = Object.values(conversationsMap);
