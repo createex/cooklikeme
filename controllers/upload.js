@@ -9,7 +9,7 @@ const { uploadImages, uploadVideo, uploadDocument, uploadAudio } = require('./..
 module.exports.uploadImages = async (req, res) => {
     try {
         const files = req.files;
-        const imageUrls = await uploadImages('todo', files);
+        const imageUrls = await uploadImages('images', files);
         if (!imageUrls || imageUrls.errors) {
             throw new Error('Failed to upload images');
         }
@@ -41,7 +41,7 @@ module.exports.uploadVideo = async (req, res) => {
             return res.status(400).send('No video file uploaded.');
         }
         const video = req.files.video;
-        const { url } = await uploadVideo('todo', video);
+        const { url } = await uploadVideo('videos', video);
         if (!url) throw new Error('Failed to upload video');
         return res.status(200).json({
             success: true,
