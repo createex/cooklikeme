@@ -1,6 +1,7 @@
 const bcryptjs = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
+const Conversation = require("../models/conversation");
 const Post = require("../models/post");
 const { sendOtp, getOtp } = require("../utils/send_otp");
 const { createUserWithWallet } = require("../controllers/wallet"); // Import wallet controller
@@ -332,6 +333,7 @@ const getUserProfile = async (req, res) => {
 const getOtherUserProfile = async (req, res) => {
   try {
     // Fetch the user by userId that is already set by the userMiddleware
+    const currentUserId = req.userId;
     const userId = req.query.userId;
     const user = await User.findById(userId);
 
@@ -340,6 +342,19 @@ const getOtherUserProfile = async (req, res) => {
         status: false,
         message: "User not found",
       });
+    }
+
+    // Check if a conversation already exists between sender and receiver
+    let conversation = await Conversation.findOne({
+      participants: { $all: [currentUserId, userId] }, // Check for both participants
+    });
+
+    // If no conversation exists, create a new one
+    if (!conversation) {
+      conversation = new Conversation({
+        participants: [currentUserId, userId],
+      });
+      await conversation.save();
     }
 
     const posts = await Post.find({ owner_id: userId });
@@ -353,6 +368,7 @@ const getOtherUserProfile = async (req, res) => {
         username: user.username,
         email: user.email,
         name: user.name,
+        conversationId: conversation._id,
         picture: user.picture,
         coverPhoto: user.coverPhoto,
         description: user.description,
