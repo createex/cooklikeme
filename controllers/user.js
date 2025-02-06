@@ -306,6 +306,7 @@ const getUserProfile = async (req, res) => {
       status: true,
       message: "User profile retrieved successfully",
       profile: {
+        id: user._id,
         username: user.username,
         email: user.email,
         name: user.name,
@@ -348,6 +349,7 @@ const getOtherUserProfile = async (req, res) => {
       status: true,
       message: "User profile retrieved successfully",
       profile: {
+        id: user._id,
         username: user.username,
         email: user.email,
         name: user.name,
