@@ -127,7 +127,7 @@ const getUserPosts = async (req, res) => {
     const posts = await Promise.all(
       userPosts.map(async (post) => {
         const owner = await User.findById(post.owner_id).select(
-          "id name picture fcmToken"
+          "id name picture fcmToken followers"
         );
         return {
           _id: post._id,
@@ -139,6 +139,7 @@ const getUserPosts = async (req, res) => {
             name: owner.name,
             picture: owner.picture,
             fcmToken: owner.fcmToken || "",
+            isFollowed: owner.followers.includes(userId),
           },
           tags: post.tags,
           location: post.location,
@@ -223,7 +224,7 @@ const getOtherUserPosts = async (req, res) => {
     const posts = await Promise.all(
       userPosts.map(async (post) => {
         const owner = await User.findById(post.owner_id).select(
-          "id name picture fcmToken"
+          "id name picture fcmToken followers"
         );
         return {
           _id: post._id,
@@ -235,6 +236,7 @@ const getOtherUserPosts = async (req, res) => {
             name: owner.name,
             picture: owner.picture,
             fcmToken: owner.fcmToken || "",
+            isFollowed: owner.followers.includes(userId),
           },
           tags: post.tags,
           location: post.location,
@@ -309,7 +311,7 @@ const getLikedPosts = async (req, res) => {
     const posts = await Promise.all(
       likedPosts.map(async (post) => {
         const owner = await User.findById(post.owner_id).select(
-          "id name picture fcmToken"
+          "id name picture fcmToken followers"
         );
 
         return {
@@ -322,6 +324,7 @@ const getLikedPosts = async (req, res) => {
             name: owner.name,
             picture: owner.picture,
             fcmToken: owner.fcmToken || "",
+            isFollowed: owner.followers.includes(userId),
           },
           tags: post.tags,
           location: post.location,
@@ -443,7 +446,7 @@ const getFollowingsPosts = async (req, res) => {
     const posts = await Promise.all(
       followingPosts.map(async (post) => {
         const owner = await User.findById(post.owner_id).select(
-          "id name picture fcmToken"
+          "id name picture fcmToken followers"
         );
         return {
           _id: post._id,
@@ -454,6 +457,7 @@ const getFollowingsPosts = async (req, res) => {
             name: owner.name,
             picture: owner.picture,
             fcmToken: owner.fcmToken || "",
+            isFollowed: owner.followers.includes(userId),
           },
           tags: post.tags,
           location: post.location,
@@ -583,7 +587,7 @@ const getTrendingAndRandomPosts = async (req, res) => {
     const populatedPosts = await Promise.all(
       posts.map(async (post) => {
         const owner = await User.findById(post.owner_id).select(
-          "name picture fcmToken"
+          "name picture fcmToken followers"
         );
         const isLiked = post.likes.some((like) => like.equals(userId));
         const isSaved = post.saves.some((save) => save.equals(userId));
@@ -597,6 +601,7 @@ const getTrendingAndRandomPosts = async (req, res) => {
             name: owner?.name || "",
             picture: owner?.picture || "",
             fcmToken: owner?.fcmToken || "",
+            isFollowed: owner.followers.includes(userId),
           },
           tags: post.tags || [],
           location: post.location || {},
