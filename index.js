@@ -24,6 +24,8 @@ app.use(express.json());
 // Connect to MongoDB
 connectDB();
 
+require("./utils/cleanupStories"); // ✅ Runs cleanup every 10 minutes
+
 // API Routes
 app.use("/api/users", userRoutes);
 app.use("/api/post", postRoutes);
