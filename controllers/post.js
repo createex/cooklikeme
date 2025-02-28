@@ -486,112 +486,110 @@ const getFollowingsPosts = async (req, res) => {
 // API 2: Get Trending and Random Posts
 const getTrendingAndRandomPosts = async (req, res) => {
   try {
-    const { itemsPerPage = 10, pageNumber = 1, exclude = [] } = req.query; // Added `exclude` for already fetched post IDs
+    const { itemsPerPage = 10, pageNumber = 1, exclude = [] } = req.query;
     const userId = req.userId;
+
     const items = Math.max(1, parseInt(itemsPerPage, 10));
     const page = Math.max(1, parseInt(pageNumber, 10));
-
     if (isNaN(items) || isNaN(page)) {
       return res.status(400).json({ message: "Invalid pagination values." });
     }
 
-    const skip = (page - 1) * items;
+    console.log(`\n[API CALL] itemsPerPage: ${items}, pageNumber: ${page}`);
 
-    const excludedIds = exclude.map((id) => mongoose.Types.ObjectId(id));
+    let excludedIds = [];
+    try {
+      excludedIds = exclude.map((id) => mongoose.Types.ObjectId(id));
+    } catch (error) {
+      console.error("Error converting excluded IDs:", error);
+    }
 
-    const [trendingPosts, randomPosts] = await Promise.all([
-      Post.aggregate([
-        {
-          $addFields: {
-            numLikes: { $size: { $ifNull: ["$likes", []] } },
-            numShares: { $size: { $ifNull: ["$shares", []] } },
-            numComments: { $size: { $ifNull: ["$comments", []] } },
-            numSaves: { $size: { $ifNull: ["$saves", []] } },
-          },
+    console.log("[DEBUG] Excluded IDs:", excludedIds);
+
+    const limit = Math.ceil(items / 2); // Half for trending, half for random
+
+    // Count total trending posts to introduce random offset
+    const trendingCount = await Post.countDocuments({ _id: { $nin: excludedIds } });
+    console.log("[DEBUG] Total Trending Posts Available:", trendingCount);
+
+    const randomTrendingSkip = Math.max(0, Math.floor(Math.random() * Math.max(1, trendingCount - limit)));
+    console.log("[DEBUG] Random Trending Skip:", randomTrendingSkip);
+
+    // Fetch Trending Posts with Aggregation (Fixing Sorting Issue)
+    const trendingPosts = await Post.aggregate([
+      { $match: { _id: { $nin: excludedIds } } },
+      {
+        $addFields: {
+          likesCount: { $size: "$likes" },
+          sharesCount: { $size: "$shares" },
+          commentsCount: { $size: "$comments" },
+          savesCount: { $size: "$saves" },
         },
-        {
-          $sort: {
-            numLikes: -1,
-            numShares: -1,
-            numComments: -1,
-            numSaves: -1,
-            createdAt: -1,
-          },
+      },
+      {
+        $sort: {
+          likesCount: -1,
+          sharesCount: -1,
+          commentsCount: -1,
+          savesCount: -1,
+          createdAt: -1,
         },
-        { $match: { _id: { $nin: excludedIds } } }, // Exclude already fetched posts
-        { $skip: skip },
-        {
-          $limit:
-            items == 1 ? 1 : items % 2 === 0 ? items / 2 : Math.ceil(items / 2),
+      },
+      { $skip: randomTrendingSkip },
+      { $limit: limit },
+      {
+        $project: {
+          _id: 1, video: 1, owner_id: 1, description: 1, tags: 1, location: 1,
+          createdAt: 1, updatedAt: 1, likes: 1, saves: 1, shares: 1, comments: 1
         },
-        {
-          $project: {
-            _id: 1,
-            video: 1,
-            owner_id: 1,
-            description: 1,
-            tags: 1,
-            location: 1,
-            createdAt: 1,
-            updatedAt: 1,
-            likes: 1,
-            saves: 1,
-            shares: 1,
-            comments: 1,
-          },
-        },
-      ]),
-      items != 1
-        ? Post.aggregate([
-            {
-              $addFields: {
-                numLikes: { $size: { $ifNull: ["$likes", []] } },
-                numShares: { $size: { $ifNull: ["$shares", []] } },
-                numComments: { $size: { $ifNull: ["$comments", []] } },
-                numSaves: { $size: { $ifNull: ["$saves", []] } },
-              },
-            },
-            {
-              $sort: {
-                numLikes: -1,
-                numShares: -1,
-                numComments: -1,
-                numSaves: -1,
-                createdAt: -1,
-              },
-            },
-            { $match: { _id: { $nin: excludedIds } } }, // Exclude already fetched posts
-            { $skip: skip },
-            { $limit: items % 2 === 0 ? items / 2 : Math.floor(items / 2) },
-            {
-              $project: {
-                _id: 1,
-                video: 1,
-                owner_id: 1,
-                description: 1,
-                tags: 1,
-                location: 1,
-                createdAt: 1,
-                updatedAt: 1,
-                likes: 1,
-                saves: 1,
-                shares: 1,
-                comments: 1,
-              },
-            },
-          ])
-        : [],
+      },
     ]);
 
+    console.log("[DEBUG] Trending Posts Fetched:", trendingPosts.length);
+
+    // Count total random posts to introduce random offset
+    const randomCount = await Post.countDocuments({ _id: { $nin: excludedIds } });
+    console.log("[DEBUG] Total Random Posts Available:", randomCount);
+
+    const randomSkip = Math.max(0, Math.floor(Math.random() * Math.max(1, randomCount - (limit * 3))));
+    console.log("[DEBUG] Random Skip for Random Posts:", randomSkip);
+
+    // Fetch Random Posts using Aggregation
+    let randomPosts = await Post.aggregate([
+      { $match: { _id: { $nin: excludedIds } } },
+      { $sample: { size: limit * 3 } }, // Ensures full randomization
+      {
+        $project: {
+          _id: 1, video: 1, owner_id: 1, description: 1, tags: 1, location: 1,
+          createdAt: 1, updatedAt: 1, likes: 1, saves: 1, shares: 1, comments: 1
+        },
+      },
+    ]);
+
+    console.log("[DEBUG] Random Posts Found Before Shuffling:", randomPosts.length);
+
+    // Shuffle fetched random posts
+    randomPosts = randomPosts.sort(() => Math.random() - 0.5).slice(0, limit);
+
+    console.log("[DEBUG] Random Posts After Limiting:", randomPosts.length);
+
+    // Merge Trending and Random Posts
     const posts = [...trendingPosts, ...randomPosts];
+
+    console.log("[DEBUG] Total Posts After Merging:", posts.length);
+
+    if (posts.length === 0) {
+      return res.status(200).json({
+        message: "No posts available for this session",
+        posts: [],
+      });
+    }
+
+    // Populate post owner details and check user interactions (likes/saves)
     const populatedPosts = await Promise.all(
       posts.map(async (post) => {
-        const owner = await User.findById(post.owner_id).select(
-          "name picture fcmToken followers"
-        );
-        const isLiked = post.likes.some((like) => like.equals(userId));
-        const isSaved = post.saves.some((save) => save.equals(userId));
-
+        const owner = await User.findById(post.owner_id).select("name picture fcmToken followers");
+    
         return {
           _id: post._id,
           video: post.video || "",
@@ -601,7 +599,7 @@ const getTrendingAndRandomPosts = async (req, res) => {
             name: owner?.name || "",
             picture: owner?.picture || "",
             fcmToken: owner?.fcmToken || "",
-            isFollowed: owner.followers.includes(userId),
+            isFollowed: owner?.followers.includes(userId),
           },
           tags: post.tags || [],
           location: post.location || {},
@@ -609,13 +607,16 @@ const getTrendingAndRandomPosts = async (req, res) => {
           shares: post.shares?.length || 0,
           saves: post.saves?.length || 0,
           comments: post.comments?.length || 0,
-          isLiked,
-          isSaved,
+          isLiked: post.likes.some((l) => l.equals(userId)), // ✅ Fixed
+          isSaved: post.saves.some((s) => s.equals(userId)), // ✅ Fixed
           createdAt: post.createdAt,
           updatedAt: post.updatedAt,
         };
       })
     );
+    
+
+    console.log("[DEBUG] Populated Posts:", populatedPosts.length);
 
     res.status(200).json({
       message: "Trending and random posts fetched successfully",
@@ -623,11 +624,10 @@ const getTrendingAndRandomPosts = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching trending and random posts:", error);
-    res
-      .status(500)
-      .json({ message: "Internal Server Error", error: error.message });
+    res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 
 const likePost = async (req, res) => {
   try {

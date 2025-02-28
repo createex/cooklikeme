@@ -6,6 +6,8 @@ const Post = require("../models/post");
 const { sendOtp, getOtp } = require("../utils/send_otp");
 const { createUserWithWallet } = require("../controllers/wallet"); // Import wallet controller
 const mongoose = require("mongoose");
+const NodeRSA = require("node-rsa");
+const { decryptOldPassword } = require("../utils/old_decryption"); // Import old decryption logic
 
 // User Login
 const login = async (req, res) => {
@@ -31,22 +33,23 @@ const login = async (req, res) => {
       user.fcmToken = fcmToken;
       await user.save();
     }
-
-    // Compare the password with the stored hash
+    
+    // // First, attempt to compare the password using bcrypt
     const isPasswordCorrect = await bcryptjs.compare(password, user.password);
-    if (!isPasswordCorrect) {
-      return res.status(400).json({ message: "Invalid password" });
+    if (isPasswordCorrect) {
+      // Create a JWT token
+      const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+      return res.status(200).json({
+        message: "Login successful",
+        isOtpVerified: user.isOtpVerified,
+        token,
+        _id: user._id,
+      });
     }
 
-    // Create a JWT token
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+    // If both methods fail, return password incorrect
+    return res.status(400).json({ message: "Invalid password" });
 
-    return res.status(200).json({
-      message: "Login successful",
-      isOtpVerified: user.isOtpVerified,
-      token,
-      _id: user._id,
-    });
   } catch (error) {
     return res.status(500).json({ message: "Something went wrong.", error });
   }
