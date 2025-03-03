@@ -27,10 +27,20 @@ const storySchema = new mongoose.Schema({
     default: function() { 
       return Date.now() + 24 * 60 * 60 * 1000;  // 24 hours from creation time
     }
+  },
+  isActive: { 
+    type: Boolean, 
+    default: true  // Story is active by default
   }
 });
 
-// TTL index to auto-delete after 24 hours
-storySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// Pre-save middleware to automatically deactivate the story after 24 hours
+storySchema.pre('save', function(next) {
+  const currentTime = Date.now();
+  if (this.expiresAt <= currentTime) {
+    this.isActive = false;  // Deactivate story after 24 hours
+  }
+  next();
+});
 
 module.exports = mongoose.model('Story', storySchema);

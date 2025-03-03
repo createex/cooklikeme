@@ -491,6 +491,7 @@ const getTrendingAndRandomPosts = async (req, res) => {
 
     const items = Math.max(1, parseInt(itemsPerPage, 10));
     const page = Math.max(1, parseInt(pageNumber, 10));
+
     if (isNaN(items) || isNaN(page)) {
       return res.status(400).json({ message: "Invalid pagination values." });
     }
@@ -515,7 +516,7 @@ const getTrendingAndRandomPosts = async (req, res) => {
     const randomTrendingSkip = Math.max(0, Math.floor(Math.random() * Math.max(1, trendingCount - limit)));
     console.log("[DEBUG] Random Trending Skip:", randomTrendingSkip);
 
-    // Fetch Trending Posts with Aggregation (Fixing Sorting Issue)
+    // Fetch Trending Posts with Aggregation
     const trendingPosts = await Post.aggregate([
       { $match: { _id: { $nin: excludedIds } } },
       {
@@ -547,7 +548,10 @@ const getTrendingAndRandomPosts = async (req, res) => {
 
     console.log("[DEBUG] Trending Posts Fetched:", trendingPosts.length);
 
-    // Count total random posts to introduce random offset
+    // Update exclusion list
+    excludedIds.push(...trendingPosts.map(post => post._id));
+
+    // Count total random posts
     const randomCount = await Post.countDocuments({ _id: { $nin: excludedIds } });
     console.log("[DEBUG] Total Random Posts Available:", randomCount);
 
@@ -585,6 +589,9 @@ const getTrendingAndRandomPosts = async (req, res) => {
       });
     }
 
+    // Update exclusion list
+    excludedIds.push(...randomPosts.map(post => post._id));
+
     // Populate post owner details and check user interactions (likes/saves)
     const populatedPosts = await Promise.all(
       posts.map(async (post) => {
@@ -607,20 +614,20 @@ const getTrendingAndRandomPosts = async (req, res) => {
           shares: post.shares?.length || 0,
           saves: post.saves?.length || 0,
           comments: post.comments?.length || 0,
-          isLiked: post.likes.some((l) => l.equals(userId)), // ✅ Fixed
-          isSaved: post.saves.some((s) => s.equals(userId)), // ✅ Fixed
+          isLiked: post.likes.some((l) => l.equals(userId)), 
+          isSaved: post.saves.some((s) => s.equals(userId)), 
           createdAt: post.createdAt,
           updatedAt: post.updatedAt,
         };
       })
     );
     
-
     console.log("[DEBUG] Populated Posts:", populatedPosts.length);
 
     res.status(200).json({
       message: "Trending and random posts fetched successfully",
       posts: populatedPosts,
+      exclude: excludedIds.map(id => id.toString()), // Send updated exclusion list
     });
   } catch (error) {
     console.error("Error fetching trending and random posts:", error);
