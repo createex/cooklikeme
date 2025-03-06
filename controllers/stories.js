@@ -91,6 +91,7 @@ const getAllStories = async (req, res) => {
       const ownerId = story.owner_id._id.toString();
       const storyData = {
         _id: story._id,
+        text: story.text, // Include the text field
         createdAt: story.createdAt,
         media: story.media,
         mediaType: story.mediaType,
@@ -140,6 +141,7 @@ const getAllStories = async (req, res) => {
   }
 };
 
+
 // Get all stories of a specific owner
 const getStoriesByOwner = async (req, res) => {
   try {
@@ -167,6 +169,7 @@ const getStoriesByOwner = async (req, res) => {
       },
       stories: stories.map((story) => ({
         _id: story._id,
+        text: story.text, // Include the text field
         media: story.media,
         mediaType: story.mediaType,
         createdAt: story.createdAt,
@@ -178,5 +181,6 @@ const getStoriesByOwner = async (req, res) => {
       .json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 
 module.exports = { addStory, getAllStories, getStoriesByOwner };
