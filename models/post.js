@@ -12,7 +12,15 @@ const postSchema = new mongoose.Schema({
   tags: [{ type: String, required: true }],
   thumbnail: { type: String, default: '' },
   location: {
-    locationString: { type: String, required: true },
+    locationString: { 
+      type: String,
+      validate: {
+        validator: function(value) {
+          return value !== null && value !== undefined; // Allow empty string but not null or undefined
+        },
+        message: 'Location cannot be null or undefined'
+      }
+    },
     lat: { type: Number, required: true },
     lng: { type: Number, required: true }
   },
