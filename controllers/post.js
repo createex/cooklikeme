@@ -595,7 +595,7 @@ const getTrendingAndRandomPosts = async (req, res) => {
     // Populate post owner details and check user interactions (likes/saves)
     const populatedPosts = await Promise.all(
       posts.map(async (post) => {
-        const owner = await User.findById(post.owner_id).select("name picture fcmToken followers");
+        const owner = await User.findById(post.owner_id).select("name username picture fcmToken followers");
     
         return {
           _id: post._id,
