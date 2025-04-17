@@ -604,6 +604,7 @@ const getTrendingAndRandomPosts = async (req, res) => {
           owner: {
             id: post.owner_id,
             name: owner?.name || "",
+            username: owner?.username || "",
             picture: owner?.picture || "",
             fcmToken: owner?.fcmToken || "",
             isFollowed: owner?.followers.includes(userId),
