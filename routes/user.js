@@ -47,4 +47,7 @@ router.get('/followings', proController.getFollowings);
 // Follow/Unfollow User
 router.post('/follow', proController.followOrUnfollowUser); // Now expects query param `followUserId`
 
+//Search Users
+router.get('/search', proController.searchUsers);
+
 module.exports = router;

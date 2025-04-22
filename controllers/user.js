@@ -557,6 +557,45 @@ const followOrUnfollowUser = async (req, res) => {
   }
 };
 
+const searchUsers = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { query } = req.query;
+
+    if (!query) return res.status(400).json({ message: "Query is required" });
+
+    // Find users matching name, username, or email (exclude self)
+    const users = await User.find({
+      _id: { $ne: userId },
+      $or: [
+        { name: { $regex: query, $options: 'i' } },
+        { username: { $regex: query, $options: 'i' } },
+        { email: { $regex: query, $options: 'i' } }
+      ]
+    }).select('_id name username email picture followings');
+
+    // Get current user's followings
+    const currentUser = await User.findById(userId).select('followings');
+
+    // Create set of followed IDs
+    const followedIds = new Set(currentUser.followings.map(id => id.toString()));
+
+    const result = users.map(user => ({
+      _id: user._id,
+      name: user.name,
+      username: user.username,
+      email: user.email,
+      profilePic: user.picture,
+      isFollowed: followedIds.has(user._id.toString())
+    }));
+
+    res.status(200).json(result);
+  } catch (err) {
+    console.error("User search failed:", err);
+    res.status(500).json({ message: "Search failed", error: err.message });
+  }
+};
+
 module.exports = {
   signup,
   verifyOtp,
@@ -571,5 +610,6 @@ module.exports = {
   getFollowers,
   getFollowings,
   followOrUnfollowUser,
-  getOtherUserProfile
+  getOtherUserProfile,
+  searchUsers
 };
