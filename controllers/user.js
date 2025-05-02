@@ -575,10 +575,11 @@ const searchUsers = async (req, res) => {
     }).select('_id name username email picture followings');
 
     // Get current user's followings
-    const currentUser = await User.findById(userId).select('followings');
+    const currentUser = await User.findById(userId).select('followings followers');
 
     // Create set of followed IDs
     const followedIds = new Set(currentUser.followings.map(id => id.toString()));
+    const followersIds = new Set(currentUser.followers.map(id => id.toString()));
 
     const result = users.map(user => ({
       _id: user._id,
@@ -586,7 +587,8 @@ const searchUsers = async (req, res) => {
       username: user.username,
       email: user.email,
       profilePic: user.picture,
-      isFollowed: followedIds.has(user._id.toString())
+      isFollowed: followedIds.has(user._id.toString()),
+      followedYou: followersIds.has(user._id.toString())
     }));
 
     res.status(200).json(result);

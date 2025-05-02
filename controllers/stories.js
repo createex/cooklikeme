@@ -131,7 +131,7 @@ const getAllStories = async (req, res) => {
             picture: myOwner.picture,
             stories: myOwner.stories,
           }
-        : null,
+        : [],
       otherStories: otherStories.length ? otherStories : [],
     });
   } catch (error) {
@@ -181,6 +181,5 @@ const getStoriesByOwner = async (req, res) => {
       .json({ message: "Internal Server Error", error: error.message });
   }
 };
-
 
 module.exports = { addStory, getAllStories, getStoriesByOwner };
