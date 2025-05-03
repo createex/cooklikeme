@@ -10,6 +10,7 @@ const stripeRoutes = require("./routes/stripe");
 const storiesRoutes = require("./routes/story");
 const uploadRoutes = require("./routes/upload");
 const chatRoutes = require("./routes/chatRoutes");
+const videoRoutes = require("./routes/video");
 require("dotenv").config();
 
 const app = express();
@@ -34,6 +35,7 @@ app.use("/api/stripe", stripeRoutes);
 app.use("/api/story", storiesRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/stream", videoRoutes);
 
 // Base route
 app.get("/", (req, res) => {

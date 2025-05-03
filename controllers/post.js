@@ -597,9 +597,13 @@ const getTrendingAndRandomPosts = async (req, res) => {
       posts.map(async (post) => {
         const owner = await User.findById(post.owner_id).select("name username picture fcmToken followers");
     
+        const streamBaseUrl = `${req.protocol}://${req.get('host')}/stream`;
+        const videoFilename = post.video?.split("/").pop();
+        const streamUrl = `${streamBaseUrl}/${videoFilename}`;
+
         return {
           _id: post._id,
-          video: post.video || "",
+          video: streamUrl || "",
           description: post.description || "",
           owner: {
             id: post.owner_id,
