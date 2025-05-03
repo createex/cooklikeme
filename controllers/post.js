@@ -603,7 +603,9 @@ const getTrendingAndRandomPosts = async (req, res) => {
 
         return {
           _id: post._id,
-          video: fileUtils.getProxyStreamUrl(req, post.video),
+          video: post.video.includes("http")
+          ? post.video
+          : fileUtils.getProxyStreamUrl(req, post.video),
           description: post.description || "",
           owner: {
             id: post.owner_id,
