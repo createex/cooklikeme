@@ -25,14 +25,18 @@ router.get("/:filename", (req, res) => {
       const total = videoBuffer.length;
 
       // Parse the "bytes=start-end" Range header
-      const match = range.match(/bytes=(\d+)-(\d*)/);
-      const start = parseInt(match[1], 10);
-      const end = match[2] ? parseInt(match[2], 10) : total - 1;
+      const match = /^bytes=(\d+)-(\d*)$/.exec(range);
+      if (!match) {
+        return res.status(416).send("Invalid Range header format.");
+    }
 
-      // Validate range
-      if (start >= total || end >= total) {
-        res.status(416).send("Requested range not satisfiable");
-        return;
+      const start = parseInt(match[1], 10);
+      let end = match[2] ? parseInt(match[2], 10) : total - 1;
+      if (isNaN(end) || end >= total) {
+        end = total - 1;
+      }
+      if (start >= total || end < start) {
+        return res.status(416).send("Requested range not satisfiable");
       }
 
       const chunkSize = end - start + 1;
