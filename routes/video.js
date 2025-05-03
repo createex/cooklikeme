@@ -1,34 +1,63 @@
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
 const router = express.Router();
+const https = require("https");
+const { PassThrough } = require("stream");
 
+// Buffer the video file from Azure, then stream partial content
 router.get("/:filename", (req, res) => {
-  const filePath = path.join(__dirname, "../videos", req.params.filename);
-  const stat = fs.statSync(filePath);
-  const fileSize = stat.size;
+  const filename = req.params.filename;
+  const azureUrl = `https://cooklikeme2.blob.core.windows.net/videos/${filename}`;
   const range = req.headers.range;
 
   if (!range) {
-    res.writeHead(200, {
-      "Content-Length": fileSize,
-      "Content-Type": "video/mp4",
-    });
-    fs.createReadStream(filePath).pipe(res);
-  } else {
-    const parts = range.replace(/bytes=/, "").split("-");
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-    const chunkSize = end - start + 1;
-    const file = fs.createReadStream(filePath, { start, end });
-    res.writeHead(206, {
-      "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-      "Accept-Ranges": "bytes",
-      "Content-Length": chunkSize,
-      "Content-Type": "video/mp4",
-    });
-    file.pipe(res);
+    return res.status(416).send("Range header required for streaming");
   }
+
+  https.get(azureUrl, (azureRes) => {
+    let data = [];
+
+    azureRes.on("data", (chunk) => {
+      data.push(chunk);
+    });
+
+    azureRes.on("end", () => {
+      const videoBuffer = Buffer.concat(data);
+      const total = videoBuffer.length;
+
+      // Parse the "bytes=start-end" Range header
+      const match = range.match(/bytes=(\d+)-(\d*)/);
+      const start = parseInt(match[1], 10);
+      const end = match[2] ? parseInt(match[2], 10) : total - 1;
+
+      // Validate range
+      if (start >= total || end >= total) {
+        res.status(416).send("Requested range not satisfiable");
+        return;
+      }
+
+      const chunkSize = end - start + 1;
+      const chunk = videoBuffer.slice(start, end + 1);
+
+      res.writeHead(206, {
+        "Content-Range": `bytes ${start}-${end}/${total}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": chunkSize,
+        "Content-Type": "video/mp4",
+      });
+
+      const stream = new PassThrough();
+      stream.end(chunk);
+      stream.pipe(res);
+    });
+
+    azureRes.on("error", (err) => {
+      console.error("Azure download error:", err.message);
+      res.status(500).send("Error downloading from Azure.");
+    });
+  }).on("error", (err) => {
+    console.error("Azure fetch error:", err.message);
+    res.status(500).send("Error fetching video from Azure.");
+  });
 });
 
 module.exports = router;

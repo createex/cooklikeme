@@ -25,3 +25,10 @@ module.exports.mergeChunks = async (tempDir, fileName) => {
         writeStream.on('error', reject);
     });
 };
+
+// Helper to generate proxy stream URL
+module.exports.getProxyStreamUrl = (req, videoPath) => {
+    const fileName = videoPath?.split("/").pop(); // Get just the filename
+    return `${req.protocol}://${req.get("host")}/proxy/${fileName}`;
+  };
+  

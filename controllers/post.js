@@ -1,7 +1,7 @@
 const Post = require("../models/post");
 const User = require("../models/user");
 const Comment = require("../models/comment");
-
+const fileUtils = require("../utils/fileUtils");
 const mongoose = require("mongoose");
 
 // Validation function with user-friendly messages
@@ -603,7 +603,7 @@ const getTrendingAndRandomPosts = async (req, res) => {
 
         return {
           _id: post._id,
-          video: streamUrl || "",
+          video: fileUtils.getProxyStreamUrl(req, post.video),
           description: post.description || "",
           owner: {
             id: post.owner_id,

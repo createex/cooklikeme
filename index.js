@@ -35,7 +35,7 @@ app.use("/api/stripe", stripeRoutes);
 app.use("/api/story", storiesRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/chat", chatRoutes);
-app.use("/stream", videoRoutes);
+app.use('/proxy', videoRoutes);
 
 // Base route
 app.get("/", (req, res) => {
