@@ -125,13 +125,14 @@ const getAllStories = async (req, res) => {
     return res.status(200).json({
       message: "Stories fetched successfully",
       myStories: myOwner.stories.length
-        ? {
-            id: myOwner.id,
-            name: myOwner.name,
-            picture: myOwner.picture,
-            stories: myOwner.stories,
-          }
-        : [],
+  ? [{
+      id: myOwner.id,
+      name: myOwner.name,
+      picture: myOwner.picture,
+      stories: myOwner.stories,
+    }]
+  : [],
+
       otherStories: otherStories.length ? otherStories : [],
     });
   } catch (error) {
