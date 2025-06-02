@@ -34,27 +34,30 @@ module.exports.uploadImages = async (req, res) => {
  * @access Private
  */
 
-module.exports.uploadVideo = async (req, res) => {
-    try {
 
-        if (!req.files || !req.files.video) {
-            return res.status(400).send('No video file uploaded.');
-        }
-        const video = req.files.video;
-        const { url } = await uploadVideo('videos', video);
-        if (!url) throw new Error('Failed to upload video');
-        return res.status(200).json({
-            success: true,
-            message: 'Video uploaded successfully',
-            url
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error'
-        });
+module.exports.uploadVideo = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).send('No video file uploaded.');
     }
-}
+
+    const video = req.file;  // multer puts single files in req.file
+    const { url } = await uploadVideo('videos', video); // ✅ Correct container
+    if (!url) throw new Error('Failed to upload video');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Video uploaded successfully',
+      url
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
 
 /**
  * @description This will upload the document for the post
