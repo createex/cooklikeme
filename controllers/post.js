@@ -773,7 +773,7 @@ module.exports = {
 
 //Helpers
 const buildPostResponse = async (post, userId) => {
-  const owner = await User.findById(post.owner_id).select("name picture fcmToken followers");
+  const owner = await User.findById(post.owner_id).select("name username picture fcmToken followers");
 
   return {
     _id: post._id,
@@ -793,6 +793,7 @@ const buildPostResponse = async (post, userId) => {
     owner: {
       id: owner._id,
       name: owner.name,
+      username: owner.username || "",
       picture: owner.picture,
       fcmToken: owner.fcmToken || "",
       isFollowed: owner.followers.includes(userId),
