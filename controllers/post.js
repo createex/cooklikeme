@@ -1,8 +1,9 @@
 const Post = require("../models/post");
 const User = require("../models/user");
 const Comment = require("../models/comment");
-const fileUtils = require("../utils/fileUtils");
+const { validatePagination, noPostsFoundResponse, paginatePosts } = require("../utils/pagination");
 const mongoose = require("mongoose");
+const https = require('https');
 
 // Validation function with user-friendly messages
 const validatePost = (data) => {
@@ -80,84 +81,29 @@ const addPost = async (req, res) => {
 
 const getUserPosts = async (req, res) => {
   try {
-    const { itemsPerPage = 10, pageNumber = 1 } = req.query;
-    const items = Math.max(1, parseInt(itemsPerPage, 10));
-    const page = Math.max(1, parseInt(pageNumber, 10));
+    const { items, page, error } = validatePagination(req.query);
+    if (error) return res.status(400).json({ message: error });
+
     const userId = req.userId;
 
-    if (isNaN(items) || isNaN(page)) {
-      return res.status(400).json({ message: "Invalid pagination values." });
+    const { totalPosts, totalPages, posts } = await paginatePosts(
+      { owner_id: userId },
+      items,
+      page,
+      "video owner_id likes shares saves comments description tags location createdAt updatedAt thumbnail"
+    );
+
+    if (totalPosts === 0) {
+      return noPostsFoundResponse(res, "No posts found.", items, page);
     }
 
-    const totalPosts = await Post.countDocuments({ owner_id: userId });
-    console.log("Total Posts:", totalPosts);
-    if (
-      totalPosts === 0 ||
-      totalPosts === undefined ||
-      totalPosts === null ||
-      totalPosts === NaN ||
-      !totalPosts
-    ) {
-      return res.status(200).json({
-        message: "No posts found.",
-        posts: [],
-        pagination: {
-          totalItems: 0,
-          totalPages: 0,
-          currentPage: page,
-          itemsPerPage: items,
-        },
-      });
-    }
-
-    const totalPages = Math.ceil(totalPosts / items);
-    if (page > totalPages) {
-      return res
-        .status(400)
-        .json({ message: `Page number exceeds total pages (${totalPages}).` });
-    }
-
-    const userPosts = await Post.find({ owner_id: userId })
-      .select(
-        "video owner_id likes shares saves comments description tags location createdAt updatedAt thumbnail"
-      )
-      .skip((page - 1) * items)
-      .limit(items);
-
-    const posts = await Promise.all(
-      userPosts.map(async (post) => {
-        const owner = await User.findById(post.owner_id).select(
-          "id name picture fcmToken followers"
-        );
-        return {
-          _id: post._id,
-          thumbnail: post.thumbnail || "",
-          video: post.video,
-          description: post.description,
-          owner: {
-            id: owner._id,
-            name: owner.name,
-            picture: owner.picture,
-            fcmToken: owner.fcmToken || "",
-            isFollowed: owner.followers.includes(userId),
-          },
-          tags: post.tags,
-          location: post.location,
-          likes: post.likes.length,
-          shares: post.shares.length,
-          saves: post.saves.length,
-          comments: post.comments.length,
-          isLiked: post.likes.includes(userId),
-          isSaved: post.saves.includes(userId),
-          createdAt: post.createdAt,
-          updatedAt: post.updatedAt,
-        };
-      })
+    const responsePosts = await Promise.all(
+      posts.map(post => buildPostResponse(post, userId))
     );
 
     return res.status(200).json({
       message: "Posts fetched successfully",
-      posts,
+      posts: responsePosts,
       pagination: {
         totalPosts,
         totalPages,
@@ -166,95 +112,41 @@ const getUserPosts = async (req, res) => {
       },
     });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Internal Server Error", error: error.message });
+    return res.status(500).json({
+      message: "Internal Server Error",
+      error: error.message,
+    });
   }
 };
 
 const getOtherUserPosts = async (req, res) => {
   try {
-    const { itemsPerPage = 10, pageNumber = 1, userId } = req.query;
-    const items = Math.max(1, parseInt(itemsPerPage, 10));
-    const page = Math.max(1, parseInt(pageNumber, 10));
+    const { items, page, error } = validatePagination(req.query);
+    if (error) return res.status(400).json({ message: error });
 
-    if(userId === undefined || userId === null || userId === "") {
+    const targetUserId = req.query.userId;
+    if (!targetUserId) {
       return res.status(400).json({ message: "Invalid user ID." });
     }
 
-    if (isNaN(items) || isNaN(page)) {
-      return res.status(400).json({ message: "Invalid pagination values." });
+    const { totalPosts, totalPages, posts } = await paginatePosts(
+      { owner_id: targetUserId },
+      items,
+      page,
+      "video owner_id likes shares saves comments description tags location createdAt updatedAt thumbnail"
+    );
+
+    if (totalPosts === 0) {
+      return noPostsFoundResponse(res, "No posts found.", items, page);
     }
 
-    const totalPosts = await Post.countDocuments({ owner_id: userId });
-    console.log("Total Posts:", totalPosts);
-    if (
-      totalPosts === 0 ||
-      totalPosts === undefined ||
-      totalPosts === null ||
-      totalPosts === NaN ||
-      !totalPosts
-    ) {
-      return res.status(200).json({
-        message: "No posts found.",
-        posts: [],
-        pagination: {
-          totalItems: 0,
-          totalPages: 0,
-          currentPage: page,
-          itemsPerPage: items,
-        },
-      });
-    }
-
-    const totalPages = Math.ceil(totalPosts / items);
-    if (page > totalPages) {
-      return res
-        .status(400)
-        .json({ message: `Page number exceeds total pages (${totalPages}).` });
-    }
-
-    const userPosts = await Post.find({ owner_id: userId })
-      .select(
-        "video owner_id likes shares saves comments description tags location createdAt updatedAt thumbnail"
-      )
-      .skip((page - 1) * items)
-      .limit(items);
-
-    const posts = await Promise.all(
-      userPosts.map(async (post) => {
-        const owner = await User.findById(post.owner_id).select(
-          "id name picture fcmToken followers"
-        );
-        return {
-          _id: post._id,
-          thumbnail: post.thumbnail || "",
-          video: post.video,
-          description: post.description,
-          owner: {
-            id: owner._id,
-            name: owner.name,
-            picture: owner.picture,
-            fcmToken: owner.fcmToken || "",
-            isFollowed: owner.followers.includes(userId),
-          },
-          tags: post.tags,
-          location: post.location,
-          likes: post.likes.length,
-          shares: post.shares.length,
-          saves: post.saves.length,
-          comments: post.comments.length,
-          isLiked: post.likes.includes(req.userId),
-          isSaved: post.saves.includes(req.userId),
-          createdAt: post.createdAt,
-          updatedAt: post.updatedAt,
-        };
-      })
+    const responsePosts = await Promise.all(
+      posts.map(post => buildPostResponse(post, req.userId)) // req.userId is current user
     );
 
     return res.status(200).json({
       message: "Posts fetched successfully",
-      posts,
+      posts: responsePosts,
       pagination: {
         totalPosts,
         totalPages,
@@ -308,37 +200,7 @@ const getLikedPosts = async (req, res) => {
       .skip((page - 1) * items)
       .limit(items);
 
-    const posts = await Promise.all(
-      likedPosts.map(async (post) => {
-        const owner = await User.findById(post.owner_id).select(
-          "id name picture fcmToken followers"
-        );
-
-        return {
-          _id: post._id,
-          thumbnail: post.thumbnail || "",
-          video: post.video,
-          description: post.description,
-          owner: {
-            id: owner._id,
-            name: owner.name,
-            picture: owner.picture,
-            fcmToken: owner.fcmToken || "",
-            isFollowed: owner.followers.includes(userId),
-          },
-          tags: post.tags,
-          location: post.location,
-          likes: post.likes.length,
-          shares: post.shares.length,
-          saves: post.saves.length,
-          comments: post.comments.length,
-          isLiked: post.likes.includes(userId),
-          isSaved: post.saves.includes(userId),
-          createdAt: post.createdAt,
-          updatedAt: post.updatedAt,
-        };
-      })
-    );
+    const posts = await Promise.all(likedPosts.map(post => buildPostResponse(post, userId)));
 
     return res.status(200).json({
       message: "Liked posts fetched successfully",
@@ -393,9 +255,7 @@ const getSavedPosts = async (req, res) => {
       .skip((page - 1) * items)
       .limit(items);
 
-    posts = await Promise.all(
-      posts.map(async (post) => populateOwnerWithVideo(post, userId))
-    );
+    posts = await Promise.all(posts.map(post => buildPostResponse(post, userId)));
 
     return res.status(200).json({
       message: "Posts fetched successfully",
@@ -593,39 +453,7 @@ const getTrendingAndRandomPosts = async (req, res) => {
     excludedIds.push(...randomPosts.map(post => post._id));
 
     // Populate post owner details and check user interactions (likes/saves)
-    const populatedPosts = await Promise.all(
-      posts.map(async (post) => {
-        const owner = await User.findById(post.owner_id).select("name username picture fcmToken followers");
-    
-        const streamBaseUrl = `${req.protocol}://${req.get('host')}/stream`;
-        const videoFilename = post.video?.split("/").pop();
-        const streamUrl = `${streamBaseUrl}/${videoFilename}`;
-
-        return {
-          _id: post._id,
-          video: post.video || "",
-          description: post.description || "",
-          owner: {
-            id: post.owner_id,
-            name: owner?.name || "",
-            username: owner?.username || "",
-            picture: owner?.picture || "",
-            fcmToken: owner?.fcmToken || "",
-            isFollowed: owner?.followers.includes(userId),
-          },
-          tags: post.tags || [],
-          location: post.location || {},
-          likes: post.likes?.length || 0,
-          shares: post.shares?.length || 0,
-          saves: post.saves?.length || 0,
-          comments: post.comments?.length || 0,
-          isLiked: post.likes.some((l) => l.equals(userId)), 
-          isSaved: post.saves.some((s) => s.equals(userId)), 
-          createdAt: post.createdAt,
-          updatedAt: post.updatedAt,
-        };
-      })
-    );
+    const populatedPosts = await Promise.all(posts.map(post => buildPostResponse(post, userId)));
     
     console.log("[DEBUG] Populated Posts:", populatedPosts.length);
 
@@ -944,87 +772,51 @@ module.exports = {
 };
 
 //Helpers
-const populateOwner = async (post, userId) => {
-  const ObjectId = require("mongoose").Types.ObjectId;
-  const userIdObjectId = new ObjectId(userId);
+const buildPostResponse = async (post, userId) => {
+  const owner = await User.findById(post.owner_id).select("name picture fcmToken followers");
 
-  try {
-    console.log(`[DEBUG] Fetching owner details for post ID: ${post._id}`);
-    const owner = await User.findById(post.owner_id).select("name picture");
-    if (!owner) {
-      console.log(`[DEBUG] Owner not found for owner_id: ${post.owner_id}`);
-    }
-
-    // Ensure post properties exist
-    post.likes = post.likes || [];
-    post.saves = post.saves || [];
-    post.comments = post.comments || [];
-    post.shares = post.shares || [];
-    console.log(
-      `[DEBUG] Post likes count: ${post.likes.length}, saves count: ${post.saves.length}`
-    );
-    console.log("[DEBUG] Post" + JSON.stringify(post));
-    // Check if the current user has liked or saved the post
-    const isLiked = post.likes.some((like) => like.equals(userIdObjectId));
-    const isSaved = post.saves.some((save) => save.equals(userIdObjectId));
-    console.log(
-      `[DEBUG] Post liked by user: ${isLiked}, saved by user: ${isSaved}`
-    );
-
-    return {
-      _id: post._id,
-      thumbnail: post.thumbnail || "",
-      video: post.video || "", // Add video field if missing
-      description: post.description,
-      owner: {
-        id: post.owner_id,
-        name: owner?.name || "",
-        picture: owner?.picture || "",
-        fcmToken: owner?.fcmToken || "",
-      },
-      tags: post.tags || [],
-      location: post.location || {},
-      likes: post.likes.length || 0,
-      shares: post.shares.length || 0,
-      saves: post.saves.length || 0,
-      comments: post.comments.length || 0,
-      isLiked,
-      isSaved,
-      createdAt: post.createdAt,
-      updatedAt: post.updatedAt,
-    };
-  } catch (error) {
-    console.error(
-      `[ERROR] Error in populateOwner for post ID: ${post._id}. Error: ${error.message}`
-    );
-    throw error; // Re-throw the error to handle it upstream
-  }
-};
-
-const populateOwnerWithVideo = async (post, userId) => {
-  const owner = await User.findById(post.owner_id).select(
-    "id name picture fcmToken"
-  );
   return {
     _id: post._id,
-    thumbnail: post.thumbnail || "",
-    video: post.video || "", // Add video field if missing
-    description: post.description,
+    video: post.video || "",
+    thumbnail: await getSafeThumbnail(post),
+    description: post.description || "",
+    tags: post.tags || [],
+    location: post.location || {},
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+    likes: post.likes?.length || 0,
+    shares: post.shares?.length || 0,
+    saves: post.saves?.length || 0,
+    comments: post.comments?.length || 0,
+    isLiked: post.likes?.some(like => like.equals(userId)) || false,
+    isSaved: post.saves?.some(save => save.equals(userId)) || false,
     owner: {
       id: owner._id,
       name: owner.name,
       picture: owner.picture,
       fcmToken: owner.fcmToken || "",
-    },
-    tags: post.tags,
-    location: post.location,
-    likes: post.likes.length,
-    shares: post.shares.length,
-    saves: post.saves.length,
-    comments: post.comments.length,
-    isLiked: post.likes.includes(userId),
-    isSaved: post.saves.includes(userId),
-    createdAt: post.createdAt,
-    updatedAt: post.updatedAt,
+      isFollowed: owner.followers.includes(userId),
+    }
   };
 };
+
+function checkUrlExists(url) {
+  return new Promise((resolve) => {
+    const req = https.request(url, { method: 'HEAD' }, (res) => {
+      resolve(res.statusCode === 200);
+    });
+    req.on('error', () => resolve(false));
+    req.end();
+  });
+}
+
+async function getSafeThumbnail(post) {
+  if (!post.video) return "";
+
+  const videoExists = await checkUrlExists(post.video);
+  if (!videoExists) return "";
+
+  const thumbnailUrl = post.video.replace("index.m3u8", "thumb.jpg");
+  const thumbExists = await checkUrlExists(thumbnailUrl);
+  return thumbExists ? thumbnailUrl : "";
+}

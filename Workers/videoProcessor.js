@@ -12,7 +12,6 @@ process.on("message", async ({ video, containerName }) => {
   const outputDir = `${tempBase}_hls`;
 
   try {
-    // 🔐 Decode base64 buffer from parent process
     const bufferDecoded = Buffer.from(video.buffer, 'base64');
     if (!bufferDecoded || !Buffer.isBuffer(bufferDecoded)) {
       console.error("❌ Invalid decoded video buffer");
@@ -23,7 +22,6 @@ process.on("message", async ({ video, containerName }) => {
     fs.mkdirSync(outputDir, { recursive: true });
     fs.writeFileSync(inputPath, bufferDecoded);
 
-    // 🎞️ Use full-featured FFmpeg HLS command (just like your Python version)
     const hlsCommand = `ffmpeg -i "${inputPath}" \
       -c:v libx264 -preset veryfast -crf 23 \
       -c:a aac -b:a 128k -ac 2 \
@@ -37,6 +35,17 @@ process.on("message", async ({ video, containerName }) => {
         console.error("❌ FFmpeg error:", error.message);
         return process.send({ statusCode: 500, text: "FFmpeg conversion failed" });
       }
+
+      // Generate thumbnail after HLS
+      const thumbPath = path.join(outputDir, "thumb.jpg");
+      const thumbCommand = `ffmpeg -i "${inputPath}" -ss 00:00:01 -vframes 1 "${thumbPath}"`;
+      exec(thumbCommand, (thumbErr) => {
+        if (thumbErr) {
+          console.error("❌ Failed to extract thumbnail:", thumbErr.message);
+        } else {
+          console.log("✅ Thumbnail generated at", thumbPath);
+        }
+      });
 
       const { ObjectId } = require('mongodb');
       const folderName = `videos_new/${new ObjectId().toString()}`;
