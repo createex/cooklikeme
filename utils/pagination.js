@@ -1,3 +1,6 @@
+
+const Post = require("../models/post");
+
 module.exports.validatePagination = (query) => {
     const items = Math.max(1, parseInt(query.itemsPerPage || 10, 10));
     const page = Math.max(1, parseInt(query.pageNumber || 1, 10));
