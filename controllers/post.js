@@ -633,7 +633,7 @@ const getComments = async (req, res) => {
       .skip((pageNumber - 1) * itemsPerPage) // Pagination based on the pageNumber and itemsPerPage per page
       .limit(itemsPerPage)
       .sort({ createdAt: -1 })
-      .populate("owner_id", "name email _id picture")
+      .populate("owner_id", "name email _id picture, username")
       .lean();
 
     console.log(`Fetched ${comments.length} main comments.`);
