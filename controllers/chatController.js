@@ -43,7 +43,7 @@ exports.getConversations = async (req, res) => {
     // Fetch opponent details
     const opponentIds = conversations.map((c) => c.opponentId);
     const opponents = await User.find({ _id: { $in: opponentIds } })
-      .select("name picture")
+      .select("name picture username")
       .lean();
 
     // Map opponent details to conversations
@@ -58,6 +58,7 @@ exports.getConversations = async (req, res) => {
         id: conv.opponentId, // Include opponent ID inside the opponent object
         name: opponentsMap[conv.opponentId]?.name || "",
         picture: opponentsMap[conv.opponentId]?.picture || "",
+        username: opponentsMap[conv.opponentId]?.username || "",
       },
     }));
 
