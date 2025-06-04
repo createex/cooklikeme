@@ -19,13 +19,13 @@ const sendOtp = async (email) => {
   }
 
   // Create a transporter for sending emails
-  // const transporter = nodemailer.createTransport({
-  //   service: 'gmail',  // Change to your mail service
-  //   auth: {
-  //     user: process.env.EMAIL,  // Your email address
-  //     pass: process.env.EMAIL_PASSWORD   // Your email password or app-specific password
-  //   }
-  // });
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',  // Change to your mail service
+    auth: {
+      user: "emailadress208@gmail.com",  // Your email address
+      pass: "gqxa lqwu qcdr doud"   // Your email password or app-specific password
+    }
+  });
 
   // Mail options
   const mailOptions = {
@@ -37,7 +37,7 @@ const sendOtp = async (email) => {
 
   try {
     // Send the email with the OTP
-    // await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions);
   } catch (error) {
     console.error("Error sending OTP:", error);
     throw new Error("Failed to send OTP");

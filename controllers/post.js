@@ -303,35 +303,7 @@ const getFollowingsPosts = async (req, res) => {
       .skip(skip)
       .limit(items);
 
-    const posts = await Promise.all(
-      followingPosts.map(async (post) => {
-        const owner = await User.findById(post.owner_id).select(
-          "id name picture fcmToken followers"
-        );
-        return {
-          _id: post._id,
-          video: post.video,
-          description: post.description,
-          owner: {
-            id: owner._id,
-            name: owner.name,
-            picture: owner.picture,
-            fcmToken: owner.fcmToken || "",
-            isFollowed: owner.followers.includes(userId),
-          },
-          tags: post.tags,
-          location: post.location,
-          likes: post.likes.length,
-          shares: post.shares.length,
-          saves: post.saves.length,
-          comments: post.comments.length,
-          isLiked: post.likes.includes(userId),
-          isSaved: post.saves.includes(userId),
-          createdAt: post.createdAt,
-          updatedAt: post.updatedAt,
-        };
-      })
-    );
+    posts = await Promise.all(followingPosts.map(post => buildPostResponse(post, userId)));
 
     return res
       .status(200)
